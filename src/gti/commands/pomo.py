@@ -133,19 +133,18 @@ def cmd_pomo(task_id: int = None):
         return
 
     _bell()
-    console.print(f"\n[bold green]Pomodoro done![/bold green] Time for a {BREAK_MINUTES}-minute break.")
+    console.print(f"\n[bold green]Pomodoro done![/bold green]")
 
-    take_break = confirm("Start break timer?", default=True)
-    if take_break:
-        _run_timer(f"  Break [{BREAK_MINUTES} min]", BREAK_MINUTES * 60, bar_color="green")
-        _bell()
-        console.print("\n[bold]Break over.[/bold] Good to go again.\n")
-
-    # Post-session note
+    # Post-session note — before the break
     result = Prompt.ask(
         "[bold cyan]What did you get done?[/bold cyan]",
         default="Still working on it"
     ).strip()
-
     _append_to_daily(f"**Result:** {result}\n")
     console.print("[dim]Logged to today's note.[/dim]")
+
+    take_break = confirm(f"Start {BREAK_MINUTES}-minute break timer?", default=True)
+    if take_break:
+        _run_timer(f"  Break [{BREAK_MINUTES} min]", BREAK_MINUTES * 60, bar_color="green")
+        _bell()
+        console.print(f"\n[bold]Break over.[/bold] Run [bold cyan]gti pomo[/bold cyan] to start another session.\n")
