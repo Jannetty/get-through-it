@@ -1,4 +1,4 @@
-# get-through-it — a vibe-coded friend to help you finish your doctoral dissertation
+# get-through-it: a vibe-coded friend to help you finish your doctoral dissertation
 
 You've scheduled your defense date. You have your chapters outlined and the set of work you have to do before you submit is well defined. There is light at the end of the tunnel.
 
