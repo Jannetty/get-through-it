@@ -61,7 +61,7 @@ Your friend dude checks in with a note about your week's tasks and defense date.
 
 ### Work sessions
 
-Start a Pomodoro timer — the dude watches you work:
+Start a Pomodoro timer. The dude watches you work:
 
 ```sh
 gti pomo          # free session
@@ -72,9 +72,9 @@ Before the timer starts you'll be asked what you're planning to work on. After t
 
 ### Quick notes
 
-Jot anything down without interrupting your flow — no quotes needed:
+Jot anything down without interrupting your flow, no quotes needed:
 
-```sh
+```
 gti qn remember to check whether the parity fix holds for edge cases
 gti qn wt neuroblasts grow 1.8x faster than mutant neuroblasts
 ```
