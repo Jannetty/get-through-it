@@ -3,10 +3,10 @@
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from ..config import load_tasks, save_tasks, load_config, get_next_task_id, get_anthropic_key
-from ..display import print_tasks_table, print_ai_message, print_thinking
+from ..display import print_tasks_table, print_ai_message, print_thinking, confirm
 from ..ai import ask_claude, parse_planning_input
 
 console = Console()
@@ -111,7 +111,7 @@ def cmd_plan():
             inferred_tags = proposal.get("tags") or []
 
             console.print(f"\n  [cyan]→[/cyan] [bold]{desc}[/bold]")
-            if not Confirm.ask("  Add this task?", default=True):
+            if not confirm("  Add this task?", default=True):
                 continue
 
             due = Prompt.ask("  Due date (YYYY-MM-DD)", default=inferred_due).strip() or None
@@ -126,7 +126,7 @@ def cmd_plan():
             tag_input = Prompt.ask("  Tags (comma-separated)", default=tag_default).strip()
             tags = [s.strip() for s in tag_input.split(",") if s.strip()] if tag_input else []
 
-            add_weekly = Confirm.ask("  Add to this week's focus?", default=True)
+            add_weekly = confirm("  Add to this week's focus?", default=True)
 
             new_task = {
                 "id": get_next_task_id(tasks),

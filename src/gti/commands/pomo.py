@@ -6,10 +6,10 @@ from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, BarColumn, TimeRemainingColumn, TextColumn
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
-from ..config import load_tasks, save_tasks, ensure_daily_note, ensure_daily_note_indexed
-from ..display import DUDE
+from ..config import load_tasks, save_tasks, ensure_daily_note, ensure_daily_note_indexed, format_time
+from ..display import DUDE, confirm
 
 console = Console()
 
@@ -107,7 +107,7 @@ def cmd_pomo(task_id: int = None):
     plan = Prompt.ask("[bold cyan]What are you planning to work on?[/bold cyan]").strip()
 
     start_time = datetime.now()
-    time_str = start_time.strftime("%-I:%M %p")
+    time_str = format_time(start_time)
 
     task_line = f"**Task:** #{task['id']} — {task['description']}\n" if task else ""
     pre_section = (
@@ -129,13 +129,13 @@ def cmd_pomo(task_id: int = None):
     if not completed:
         console.print("\n[yellow]Pomodoro cancelled.[/yellow]")
         end_time = datetime.now()
-        _append_to_daily(f"**Result:** Cancelled at {end_time.strftime('%-I:%M %p')}\n")
+        _append_to_daily(f"**Result:** Cancelled at {format_time(end_time)}\n")
         return
 
     _bell()
     console.print(f"\n[bold green]Pomodoro done![/bold green] Time for a {BREAK_MINUTES}-minute break.")
 
-    take_break = Confirm.ask("Start break timer?", default=True)
+    take_break = confirm("Start break timer?", default=True)
     if take_break:
         _run_timer(f"  Break [{BREAK_MINUTES} min]", BREAK_MINUTES * 60, bar_color="green")
         _bell()

@@ -2,10 +2,10 @@
 
 from datetime import datetime
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from ..config import load_tasks, save_tasks, get_next_task_id, get_anthropic_key
-from ..display import print_success, print_error, task_groups_display, print_tasks_table, print_ai_message, print_thinking
+from ..display import print_success, print_error, task_groups_display, print_tasks_table, print_ai_message, print_thinking, confirm
 
 console = Console()
 
@@ -83,7 +83,7 @@ def cmd_done(task_identifier: str):
 
             # Offer a quick note
             console.print()
-            if Confirm.ask("  Quick note on how it went?", default=False):
+            if confirm("  Quick note on how it went?", default=False):
                 from .note import cmd_quick_note
                 cmd_quick_note(task)
             return

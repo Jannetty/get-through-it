@@ -69,6 +69,11 @@ def ensure_daily_note_indexed(path: Path, now: datetime):
         save_index(index)
 
 
+def format_time(dt) -> str:
+    """Cross-platform time formatting without leading zero on hour."""
+    return dt.strftime("%I:%M %p").lstrip("0")
+
+
 def update_index_entry(file_path: str, updates: dict):
     """Update fields on an existing index entry by file path."""
     index = load_index()

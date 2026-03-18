@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from ..config import load_tasks, ensure_daily_note, ensure_daily_note_indexed, ensure_dirs
+from ..config import load_tasks, ensure_daily_note, ensure_daily_note_indexed, ensure_dirs, format_time
 from ..display import print_success
 
 console = Console()
@@ -64,7 +64,7 @@ def cmd_qn(text: str):
     """Append a freeform quick note to today's daily note."""
     ensure_dirs()
     now = datetime.now()
-    time_str = now.strftime("%-I:%M %p")
+    time_str = format_time(now)
     section = f"\n## Quick Note — {time_str}\n{text}\n"
 
     daily_path = ensure_daily_note()
@@ -99,7 +99,7 @@ def cmd_quick_note(task: dict):
 
 def _append_session_section(now: datetime, task_desc: str, answers: dict, task_id=None):
     """Append a timestamped session section to today's daily note."""
-    time_str = now.strftime("%-I:%M %p")
+    time_str = format_time(now)
     header = f"\n## Session — {time_str}"
     if task_desc:
         header += f" — {task_desc}"

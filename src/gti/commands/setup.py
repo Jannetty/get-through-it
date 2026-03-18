@@ -3,7 +3,8 @@
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
+from ..display import confirm
 
 from ..config import save_config, save_tasks, ensure_dirs, is_setup, get_next_task_id
 
@@ -14,7 +15,7 @@ def run_setup():
     ensure_dirs()
 
     if is_setup():
-        if not Confirm.ask("[yellow]gti is already set up. Reconfigure?[/yellow]"):
+        if not confirm("[yellow]gti is already set up. Reconfigure?[/yellow]"):
             return
 
     console.print(Panel(

@@ -104,7 +104,7 @@ def cmd_week():
     console.print(f"\n[dim]Review saved to {filepath}[/dim]")
 
     # Offer to re-plan the week
-    from rich.prompt import Confirm
-    if Confirm.ask("\nWant to plan next week's tasks now?", default=True):
+    from ..display import confirm
+    if confirm("\nWant to plan next week's tasks now?", default=True):
         from .plan import cmd_plan
         cmd_plan()

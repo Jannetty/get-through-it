@@ -73,6 +73,21 @@ def print_thinking(message: str = "thinking..."):
     console.print(table)
 
 
+def confirm(prompt: str, default: bool = True) -> bool:
+    """Case-insensitive y/n prompt (works around Rich's case-sensitive Confirm)."""
+    from rich.prompt import Prompt
+    default_hint = "Y/n" if default else "y/N"
+    while True:
+        response = Prompt.ask(f"{prompt} [{default_hint}]", default="").strip().lower()
+        if not response:
+            return default
+        if response in ("y", "yes"):
+            return True
+        if response in ("n", "no"):
+            return False
+        console.print("[dim]Please enter y or n.[/dim]")
+
+
 def print_dude_chat(message: str, mood: str = "normal"):
     """Lightweight dude + text, no panel border — for multi-turn chat."""
     dude_str = DUDE.get(mood, DUDE["normal"])

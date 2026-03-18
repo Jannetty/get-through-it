@@ -4,14 +4,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from ..config import (
     load_tasks, save_tasks, load_config, load_index, save_index,
     get_daily_note_path, ensure_daily_note, ensure_daily_note_indexed,
     get_next_task_id, NOTES_DIR, CHAPTER_NOTES_DIR, get_anthropic_key, ensure_dirs, update_index_entry,
+    format_time,
 )
-from ..display import print_ai_message, print_thinking, print_success
+from ..display import print_ai_message, print_thinking, print_success, confirm
 
 console = Console()
 
@@ -38,7 +39,7 @@ def cmd_wrap_day():
 
     print_ai_message(summary, title="day summary", mood="cheer")
 
-    time_str = now.strftime("%-I:%M %p")
+    time_str = format_time(now)
     summary_section = f"\n---\n\n## Day Summary — {time_str}\n\n{summary}\n"
     with open(daily_path, "a", encoding="utf-8") as f:
         f.write(summary_section)
@@ -62,7 +63,7 @@ def cmd_wrap_day():
             any_added = False
             for item in potential_tasks:
                 console.print(f"\n  [cyan]→[/cyan] {item}")
-                if Confirm.ask("  Add as a task?", default=True):
+                if confirm("  Add as a task?", default=True):
                     from datetime import datetime as dt
                     task = {
                         "id": get_next_task_id(tasks),
@@ -191,7 +192,7 @@ def cmd_wrap_week():
 
     print_success(f"Weekly wrap saved.")
 
-    if Confirm.ask("\nPlan next week now?", default=True):
+    if confirm("\nPlan next week now?", default=True):
         from .plan import cmd_plan
         cmd_plan()
 
