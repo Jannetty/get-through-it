@@ -254,6 +254,8 @@ Claude reads your note index and the content of recent notes to find relevant pa
 
 ## Thoughts? Questions? Suggestions?
 
-This thing is like 95% vibe coded, so errors are possibly very likely. I'm very open to suggestion. Feel free to open an issue or PR or anything else.
+This thing is like 95% vibe coded, so bugs and errors come with the territory. I'm very open to suggestion. Feel free to open an issue or PR or anything else.
+
+Do note that I have no tests in this repo. This is very bad form. For now I'm just vibing but the next change I will need to make is surely adding good (and non-LLM-generated) tests.
 
 In the future I think it would be fun to generalize the dude to work on multiple projects (you may notice the structure of the notes folders is designed with that future functionality in mind), but for now I need to graduate so tinkering is back burnered!
