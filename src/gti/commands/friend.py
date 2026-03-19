@@ -36,7 +36,7 @@ def _get_recent_notes_context(n: int = 3) -> str:
 
 def cmd_friend():
     if not get_anthropic_key():
-        console.print("[red]ANTHROPIC_API_KEY not set.[/red] Set it to chat with your friend dude.")
+        console.print("[red]ANTHROPIC_API_KEY not set.[/red] Add it to [bold]~/.zshrc[/bold] and run [bold]source ~/.zshrc[/bold] or open a new terminal.")
         return
 
     recent_notes = _get_recent_notes_context()

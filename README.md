@@ -25,7 +25,7 @@ cd get-through-it
 uv tool install --editable .
 ```
 
-The `--editable` flag means any changes you make to the source are picked up immediately without reinstalling. This is important if you plan on tinkering with the tool and don't want to have to reinstall each time you make a change. If you just plan on using the tool as-is you can just call `uv tool install`.
+The `--editable` flag means any changes you make to the source are picked up immediately without reinstalling. If you skip it, you'll need to run `uv tool install . --reinstall` after every change. If you just plan on using the tool as-is, `uv tool install .` works fine.
 
 Set your Anthropic API key — add this to your `~/.zshrc` (or `~/.bashrc`):
 
@@ -72,11 +72,24 @@ Before the timer starts you'll be asked what you're planning to work on. After t
 
 ### Quick notes
 
-Jot anything down without interrupting your flow, no quotes needed:
+Jot anything down without interrupting your flow:
 
-```
+```sh
 gti qn remember to check whether the parity fix holds for edge cases
 gti qn wt neuroblasts grow 1.8x faster than mutant neuroblasts
+```
+
+If your note contains apostrophes, wrap it in double quotes:
+
+```sh
+gti qn "I'm back, going to make figures"
+```
+
+If your note contains both apostrophes and double quotes, run `gti qn` bare and type at the prompt — it accepts anything:
+
+```sh
+gti qn
+Quick note: back walked the dog, I'm going to make figures. "results look promising"
 ```
 
 These get appended to today's daily note with a timestamp. During `gti wrap day`, Claude will scan them for action items (offering to turn them into tasks) and route factual observations to the appropriate chapter notes.
@@ -234,7 +247,7 @@ Claude reads your note index and the content of recent notes to find relevant pa
 | `gti plan` | Pick this week's focus with Claude |
 | `gti pomo [id]` | 25/5 Pomodoro timer |
 | `gti note` | Structured session note |
-| `gti qn <text>` | Quick freeform note — no quotes needed |
+| `gti qn [text]` | Quick freeform note — inline or prompted (prompt handles apostrophes/quotes) |
 | `gti wrap day` | End-of-day synthesis + chapter note updates |
 | `gti wrap week` | End-of-week reflection and summary |
 | `gti find "..."` | Search notes with Claude |

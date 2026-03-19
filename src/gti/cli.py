@@ -39,7 +39,7 @@ def help_cmd():
         ("gti plan",            "Claude helps you pick this week's focus and ranks your tasks"),
         ("gti today",           "Daily view + a message from your friend dude"),
         ("gti note",            "Structured session note — appended to today's daily note"),
-        ("gti qn <text>",       "Quick freeform note — no quotes needed"),
+        ("gti qn [text]",        "Quick freeform note — type inline or run bare to get a prompt"),
         ("gti wrap day",        "End of day — synthesize notes, find tasks, update chapter notes"),
         ("gti wrap week",       "End of week — reflection, summary, chapter note updates"),
         ("gti pomo [id]",       "25/5 Pomodoro timer — offers to log a note when done"),
@@ -123,12 +123,18 @@ def reorder():
 
 
 @cli.command()
-@click.argument("text", nargs=-1, required=True)
+@click.argument("text", nargs=-1, required=False)
 def qn(text):
-    """Append a quick freeform note to today's daily note. No quotes needed."""
+    """Append a quick freeform note to today's daily note."""
     _require_setup()
+    from rich.prompt import Prompt
     from .commands.note import cmd_qn
-    cmd_qn(" ".join(text))
+    if text:
+        note_text = " ".join(text)
+    else:
+        note_text = Prompt.ask("[bold cyan]Quick note[/bold cyan]").strip()
+    if note_text:
+        cmd_qn(note_text)
 
 
 @cli.command()
@@ -213,5 +219,7 @@ def _require_api_key():
     """Exit with a helpful message if ANTHROPIC_API_KEY isn't set."""
     if not get_anthropic_key():
         console.print("[bold red]ANTHROPIC_API_KEY is not set.[/bold red]")
-        console.print("Set it with: [bold]export ANTHROPIC_API_KEY=your-key-here[/bold]")
+        console.print("Add [bold]export ANTHROPIC_API_KEY=your-key-here[/bold] to your [bold]~/.zshrc[/bold], then either:")
+        console.print("  • Open a new terminal window, or")
+        console.print("  • Run [bold]source ~/.zshrc[/bold] in this one")
         raise SystemExit(1)

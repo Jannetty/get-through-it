@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.progress import Progress, BarColumn, TimeRemainingColumn, TextColumn
 from rich.prompt import Prompt
 
-from ..config import load_tasks, save_tasks, ensure_daily_note, ensure_daily_note_indexed, format_time
+from ..config import load_tasks, save_tasks, ensure_daily_note, ensure_daily_note_indexed, format_time, get_anthropic_key
 from ..display import DUDE, confirm
 
 console = Console()
@@ -100,11 +100,33 @@ def cmd_pomo(task_id: int = None):
             task["status"] = "in-progress"
             save_tasks(tasks)
 
-    task_label = f'[bold]{task["description"]}[/bold]' if task else "free session"
-
     # Pre-session: what are you planning to work on?
     console.print()
     plan = Prompt.ask("[bold cyan]What are you planning to work on?[/bold cyan]").strip()
+
+    # If no task ID given, try to match plan text to an existing task
+    if task is None and plan and get_anthropic_key():
+        active = [t for t in tasks if t.get("status") != "done"]
+        if active:
+            from ..ai import match_task_by_description
+            matched_id = match_task_by_description(plan, active)
+            if matched_id:
+                matched = next((t for t in active if t["id"] == matched_id), None)
+                if matched:
+                    console.print(f"\n[dim]Looks like this might be related to:[/dim] [bold]#{matched['id']} — {matched['description']}[/bold]")
+                    if confirm("Link this session to that task?", default=True):
+                        task = matched
+                        if task.get("status") == "todo":
+                            task["status"] = "in-progress"
+                            save_tasks(tasks)
+
+    # Label: task description > plan text > "free session"
+    if task:
+        task_label = f'[bold]{task["description"]}[/bold]'
+    elif plan:
+        task_label = plan
+    else:
+        task_label = "free session"
 
     start_time = datetime.now()
     time_str = format_time(start_time)
@@ -119,7 +141,7 @@ def cmd_pomo(task_id: int = None):
 
     console.print(Panel(
         f"[bold cyan]{WORK_MINUTES} min[/bold cyan] — {task_label}\n"
-        f"[dim]Press Ctrl+C to cancel.[/dim]",
+        f"[dim]Press Ctrl+C to cancel · open a new tab and use [bold]gti qn[/bold] to jot notes mid-session[/dim]",
         border_style="cyan",
         padding=(1, 2),
     ))

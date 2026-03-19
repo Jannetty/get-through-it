@@ -156,9 +156,13 @@ Which task ID best matches? Return ONLY the integer ID, or "null" if nothing fit
     )
 
     try:
+        import re
         text = message.content[0].text.strip()
-        if text.isdigit():
-            return int(text)
+        if text.lower() == "null":
+            return None
+        match = re.search(r'\b(\d+)\b', text)
+        if match:
+            return int(match.group(1))
     except Exception:
         pass
     return None
