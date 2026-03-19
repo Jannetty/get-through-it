@@ -35,6 +35,7 @@ def help_cmd():
         ("gti tasks",           "View all tasks grouped by status, sorted by priority"),
         ("gti add \"...\"",     "Add a task manually"),
         ("gti done <id|text>",  "Mark a task done — pass an ID or describe it in plain English"),
+        ("gti set <task> <value>", "Set status (in-progress/done/todo) or priority (high/medium/low/none)"),
         ("gti reorder",         "Manually set task priority order"),
         ("gti plan",            "Claude helps you pick this week's focus and ranks your tasks"),
         ("gti today",           "Daily view + a message from your friend dude"),
@@ -88,7 +89,7 @@ def add(description, due, tags, weekly):
         config = load_config()
         print_thinking("parsing task...")
         parsed = parse_task_from_text(text, config.get("chapters", []))
-        cmd_add(parsed["description"], due_date=parsed.get("due_date"), tags=parsed.get("tags", []), weekly=parsed.get("weekly", False))
+        cmd_add(parsed["description"], due_date=parsed.get("due_date"), tags=parsed.get("tags", []), weekly=parsed.get("weekly", False), priority=parsed.get("priority"))
     else:
         cmd_add(text, due_date=due, tags=tag_list, weekly=weekly)
 
@@ -126,6 +127,15 @@ def done(task_identifier):
     _require_setup()
     from .commands.tasks import cmd_done
     cmd_done(" ".join(task_identifier))
+
+
+@cli.command(name="set")
+@click.argument("args", nargs=-1)
+def set_cmd(args):
+    """Set a task's status. E.g.: gti set 8 in-progress  or  gti set send parameters to done"""
+    _require_setup()
+    from .commands.tasks import cmd_set
+    cmd_set(list(args))
 
 
 @cli.command()

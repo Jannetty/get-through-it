@@ -496,13 +496,14 @@ def parse_task_from_text(text: str, chapters: list) -> dict:
 Dissertation chapters: {chapter_list}
 
 Return ONLY JSON:
-{{"description": "clean task description (action only, no metadata)", "due_date": "YYYY-MM-DD or null", "tags": ["ch3"], "weekly": false}}
+{{"description": "clean task description (action only, no metadata)", "due_date": "YYYY-MM-DD or null", "tags": ["ch3"], "weekly": false, "priority": "high or medium or low or null"}}
 
 Rules:
 - description: the action itself, strip out any date/priority/chapter references
 - due_date: parse relative dates like "today", "tomorrow", "Thursday" relative to {today}; null if not mentioned
 - tags: infer from chapter references or topic keywords; use short slugs like "ch3"; empty list if unclear
-- weekly: true if they say "this week", "high priority", "urgent", or similar""",
+- weekly: true if they say "this week" or similar timing, NOT just because something is high priority
+- priority: "high" for urgent/critical/highest/important, "low" for low/minor/nice-to-have, "medium" for normal, null if not mentioned""",
         }],
     )
 

@@ -18,24 +18,25 @@ DUDE = {
 }
 
 
+_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+_PRIORITY_LABEL = {"high": "[bold red]H[/bold red]", "medium": "[yellow]M[/yellow]", "low": "[dim]L[/dim]"}
+
+
 def _task_sort_key(task):
-    """Sort key: explicit priority first, then soonest due date, then no-due-date tasks."""
-    priority = task.get("priority")
+    """Sort: high → medium → low → unset. Due date ascending within each level, no-due-date last."""
+    p = task.get("priority")
+    p_rank = _PRIORITY_RANK.get(p, 3) if isinstance(p, str) else 3  # old numeric → treated as unset
+
     due = task.get("due_date") or ""
     try:
         datetime.strptime(due, "%Y-%m-%d")
         has_due = True
     except (ValueError, TypeError):
         has_due = False
+        due = ""
 
-    if priority is not None:
-        # Explicit priority wins; use due date as tiebreaker within same priority
-        return (0, priority, due if has_due else "9999-99-99")
-    if has_due:
-        # No explicit priority — sort by due date ascending (soonest first)
-        return (1, 0, due)
-    # No priority, no due date — go last
-    return (2, 0, "")
+    # Within each priority level: due dates first (ascending), then no-due-date tasks
+    return (p_rank, 0 if has_due else 1, due, task.get("id", 9999))
 
 console = Console()
 
@@ -123,7 +124,7 @@ def print_tasks_table(tasks: list, title: str = "Tasks"):
         expand=False,
     )
 
-    table.add_column("P", style="dim", width=2)
+    table.add_column("Pri", width=4)
     table.add_column("ID", style="dim", width=4)
     table.add_column("Description", min_width=30)
     table.add_column("Status", width=12)
@@ -151,7 +152,8 @@ def print_tasks_table(tasks: list, title: str = "Tasks"):
 
         tags = ", ".join(task.get("tags", []))
         weekly = "[bold cyan]★[/bold cyan]" if task.get("weekly") else ""
-        priority = str(task["priority"]) if task.get("priority") is not None else ""
+        p = task.get("priority")
+        priority = _PRIORITY_LABEL.get(p, "") if isinstance(p, str) else ""
 
         desc = task.get("description", "")
         if task.get("status") == "done":

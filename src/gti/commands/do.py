@@ -33,6 +33,7 @@ def cmd_do(text: str):
             due_date=result.get("due_date"),
             tags=result.get("tags", []),
             weekly=result.get("weekly", False),
+            priority=result.get("priority"),
         )
     elif action == "done":
         from .tasks import cmd_done
