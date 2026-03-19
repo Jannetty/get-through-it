@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from ..display import confirm
 
-from ..config import save_config, save_tasks, ensure_dirs, is_setup, get_next_task_id
+from ..config import save_config, save_tasks, ensure_dirs, is_setup, get_next_task_id, ensure_chapter_note_stubs
 
 console = Console()
 
@@ -106,6 +106,7 @@ def run_setup():
     save_config(config)
     if tasks:
         save_tasks(tasks)
+    ensure_chapter_note_stubs(chapters)
 
     console.print()
     console.print(Panel(

@@ -75,14 +75,16 @@ def cmd_qn(text: str):
     console.print("[dim]Added to today's note.[/dim]")
 
 
-def cmd_quick_note(task: dict):
+def cmd_quick_note(task: dict, how: str = ""):
     """Lightweight post-task note — two prompts, appended to today's daily note."""
     ensure_dirs()
     now = datetime.now()
     task_desc = task.get("description", "")
 
-    console.print()
-    how = Prompt.ask("  [bold cyan]How'd it go?[/bold cyan]", default="").strip()
+    if not how:
+        console.print()
+        how = Prompt.ask("  [bold cyan]How'd it go?[/bold cyan]", default="").strip()
+
     console.print()
     next_up = Prompt.ask(
         "  [bold cyan]Anything to pick up next time?[/bold cyan] [dim](Enter to skip)[/dim]",

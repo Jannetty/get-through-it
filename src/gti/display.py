@@ -19,16 +19,23 @@ DUDE = {
 
 
 def _task_sort_key(task):
-    """Sort key: priority field first, then valid due dates, then everything else."""
+    """Sort key: explicit priority first, then soonest due date, then no-due-date tasks."""
     priority = task.get("priority")
-    if priority is not None:
-        return (0, priority, "")
     due = task.get("due_date") or ""
     try:
         datetime.strptime(due, "%Y-%m-%d")
-        return (1, 0, due)
+        has_due = True
     except (ValueError, TypeError):
-        return (2, 0, "")
+        has_due = False
+
+    if priority is not None:
+        # Explicit priority wins; use due date as tiebreaker within same priority
+        return (0, priority, due if has_due else "9999-99-99")
+    if has_due:
+        # No explicit priority — sort by due date ascending (soonest first)
+        return (1, 0, due)
+    # No priority, no due date — go last
+    return (2, 0, "")
 
 console = Console()
 

@@ -10,7 +10,7 @@ from ..config import (
     load_tasks, save_tasks, load_config, load_index, save_index,
     get_daily_note_path, ensure_daily_note, ensure_daily_note_indexed,
     get_next_task_id, NOTES_DIR, CHAPTER_NOTES_DIR, get_anthropic_key, ensure_dirs, update_index_entry,
-    format_time,
+    format_time, chapter_note_slug,
 )
 from ..display import print_ai_message, print_thinking, print_success, confirm
 from rich.prompt import Prompt
@@ -230,10 +230,7 @@ def _match_chapter(text: str, chapters: list) -> str | None:
 
 def _append_to_chapter_note(chapter_label: str, content: str, now: datetime):
     """Append a dated excerpt to the appropriate chapter note file."""
-    slug = chapter_label.lower()
-    for ch in " :/()\\":
-        slug = slug.replace(ch, "-")
-    slug = slug.strip("-")[:40]
+    slug = chapter_note_slug(chapter_label)
     filepath = CHAPTER_NOTES_DIR / f"{slug}.md"
 
     date_str = now.strftime("%B %d, %Y")

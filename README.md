@@ -109,12 +109,36 @@ Six guided prompts: what you worked on, what you got done, what's in progress, w
 
 ```sh
 gti tasks                    # view all active tasks, sorted by priority
-gti add "description"        # add a task
-gti add "description" -d 2026-03-21 -t chapter_3  # with due date and tags
+gti add description here     # add a task — no quotes needed
+gti add description here -d 2026-03-21 -t chapter_3  # with explicit due date and tags
 gti done 3                   # mark task #3 done
-gti done "I fixed the parity issue"   # natural language — Claude matches it
+gti done I fixed the parity issue   # natural language — Claude matches it
 gti reorder                  # manually set priority order
 ```
+
+When you use `gti add` without explicit flags, Claude parses your description for embedded metadata:
+
+```sh
+gti add sent annotated parameters to Smith group due today high priority chapter 3
+# → description: "Send annotated parameters to Smith group", due: today, tags: [ch3], weekly: true
+```
+
+### Natural language commands
+
+For when you don't want to think about which command to use:
+
+```sh
+gti do finished preparing materials for my meeting
+# → marks the matching task done
+
+gti do send the Smith group an annotated set of my parameters, due today, chapter 3
+# → adds a task with parsed metadata
+
+gti do heading to lunch, back in an hour
+# → logs a quick note
+```
+
+Claude figures out whether you mean `gti done`, `gti add`, or `gti qn` based on context.
 
 ### End of day
 
@@ -222,15 +246,16 @@ wt neuroblasts grow 1.8x faster than mutant neuroblasts
 - WT neuroblast growth rate finding logged — routed to Ch3 notes
 ```
 
-### Searching notes
+### Opening and searching notes
 
 ```sh
-gti find "volume-based growth regulation"
-gti find "what did I decide about the VAE approach"
-gti find "times I felt stuck on chapter 3"
+gti open                                    # opens the notes folder in VSCode
+gti open today's daily note                 # jumps straight to today's note
+gti open the note about neuroblast growth   # Claude finds the best match and opens it
+gti open what I decided about the VAE approach
 ```
 
-Claude reads your note index and the content of recent notes to find relevant passages and explain why they match.
+`gti open` with a description first does a fast index match, then falls back to a full content search if needed. It opens the best-matching note directly in VSCode alongside the folder.
 
 ---
 
@@ -241,8 +266,9 @@ Claude reads your note index and the content of recent notes to find relevant pa
 | `gti setup` | First-time setup |
 | `gti today` | Daily view + friend dude check-in |
 | `gti tasks` | All active tasks, sorted by priority |
-| `gti add "..."` | Add a task (use quotes) |
+| `gti add ...` | Add a task — Claude parses embedded due dates, tags, and priority |
 | `gti done <id or text>` | Mark a task done |
+| `gti do ...` | Natural language — Claude routes to add, done, or qn |
 | `gti reorder` | Manually set task priority |
 | `gti plan` | Pick this week's focus with Claude |
 | `gti pomo [id]` | 25/5 Pomodoro timer |
@@ -250,8 +276,7 @@ Claude reads your note index and the content of recent notes to find relevant pa
 | `gti qn [text]` | Quick freeform note — inline or prompted (prompt handles apostrophes/quotes) |
 | `gti wrap day` | End-of-day synthesis + chapter note updates |
 | `gti wrap week` | End-of-week reflection and summary |
-| `gti find "..."` | Search notes with Claude |
-| `gti open [query]` | Open notes in VSCode |
+| `gti open [query]` | Open notes in VSCode — describe a note to jump straight to it |
 | `gti friend` | Chat with your friend dude |
 
 ---

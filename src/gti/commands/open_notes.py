@@ -4,54 +4,62 @@ import subprocess
 from pathlib import Path
 from rich.console import Console
 
-from ..config import NOTES_DIR, load_index, get_anthropic_key
+from ..config import NOTES_DIR, DISSERTATION_DIR, load_index, get_anthropic_key
 from ..display import print_error
 
 console = Console()
 
 
 def cmd_open(query: str = None):
-    if not NOTES_DIR.exists():
-        print_error(f"Notes directory doesn't exist yet: {NOTES_DIR}")
+    if not DISSERTATION_DIR.exists():
+        print_error(f"Notes directory doesn't exist yet: {DISSERTATION_DIR}")
         return
 
     if not query:
-        _open_in_vscode(NOTES_DIR)
+        _open_in_vscode(DISSERTATION_DIR)
         return
 
     # Try to match query to a specific note
     index = load_index()
     if not index:
         console.print("[dim]No notes yet — opening the notes folder.[/dim]")
-        _open_in_vscode(NOTES_DIR)
+        _open_in_vscode(DISSERTATION_DIR)
         return
 
     if get_anthropic_key():
-        console.print(f"[dim]Finding note matching: {query}...[/dim]")
         from ..ai import find_note_file
-        file_path = find_note_file(query, index)
+        from ..display import print_thinking
+        print_thinking(f"finding: {query}...")
+        # Fast pass: index metadata only
+        file_path = find_note_file(query, index, read_content=False)
         if file_path:
             path = Path(file_path)
             if path.exists():
-                _open_in_vscode(NOTES_DIR, path)
+                _open_in_vscode(DISSERTATION_DIR, path)
                 return
-            console.print(f"[yellow]Matched note not found on disk, opening folder instead.[/yellow]")
-        else:
-            console.print(f"[yellow]No match found for \"{query}\", opening folder.[/yellow]")
+        # Deep pass: read note content
+        print_thinking("looking harder...")
+        file_path = find_note_file(query, index, read_content=True)
+        if file_path:
+            path = Path(file_path)
+            if path.exists():
+                _open_in_vscode(DISSERTATION_DIR, path)
+                return
+        console.print(f"[yellow]No match found for \"{query}\" — opening folder.[/yellow]")
     else:
         console.print("[dim]ANTHROPIC_API_KEY not set — opening notes folder.[/dim]")
 
-    _open_in_vscode(NOTES_DIR)
+    _open_in_vscode(DISSERTATION_DIR)
 
 
-def _open_in_vscode(*paths):
-    """Open one or more paths in VSCode."""
-    str_paths = [str(p) for p in paths]
+def _open_in_vscode(folder: Path, file: Path = None):
+    """Open the notes folder in VSCode, optionally jumping to a specific file."""
     try:
-        subprocess.run(["code"] + str_paths, check=True)
-        if len(str_paths) > 1:
-            console.print(f"[dim]Opened {paths[-1].name} in VSCode.[/dim]")
+        if file:
+            subprocess.run(["code", str(folder), "--goto", str(file)], check=True)
+            console.print(f"[dim]Opened {file.name} in VSCode.[/dim]")
         else:
+            subprocess.run(["code", str(folder)], check=True)
             console.print(f"[dim]Opened notes folder in VSCode.[/dim]")
     except FileNotFoundError:
         print_error(

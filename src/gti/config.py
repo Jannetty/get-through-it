@@ -144,3 +144,46 @@ def get_next_task_id(tasks: list) -> int:
 def get_anthropic_key() -> str | None:
     """Get the Anthropic API key from environment."""
     return os.environ.get("ANTHROPIC_API_KEY")
+
+
+def chapter_note_slug(chapter_label: str) -> str:
+    """Return a filesystem-safe slug for a chapter label like 'Ch3: title'."""
+    slug = chapter_label.lower()
+    for ch in " :/()\\":
+        slug = slug.replace(ch, "-")
+    return slug.strip("-")[:40]
+
+
+def ensure_chapter_note_stubs(chapters: list):
+    """Create empty chapter note files and index entries for any that don't exist yet."""
+    ensure_dirs()
+    index = load_index()
+    now = datetime.now()
+    changed = False
+
+    for i, ch in enumerate(chapters):
+        label = f"Ch{i+1}: {ch}"
+        slug = chapter_note_slug(label)
+        filepath = CHAPTER_NOTES_DIR / f"{slug}.md"
+
+        if not filepath.exists():
+            filepath.write_text(
+                f"# {label} — Notes\n\n"
+                f"_Notes for this chapter will be added here during `gti wrap day`._\n",
+                encoding="utf-8",
+            )
+
+        path_str = str(filepath)
+        if not any(e.get("file") == path_str for e in index):
+            index.append({
+                "date": now.isoformat(),
+                "file": path_str,
+                "project": "dissertation",
+                "task_id": None,
+                "summary": f"{label} — notes",
+                "tags": ["chapter-note"],
+            })
+            changed = True
+
+    if changed:
+        save_index(index)

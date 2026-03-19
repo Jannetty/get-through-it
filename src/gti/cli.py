@@ -43,8 +43,8 @@ def help_cmd():
         ("gti wrap day",        "End of day — synthesize notes, find tasks, update chapter notes"),
         ("gti wrap week",       "End of week — reflection, summary, chapter note updates"),
         ("gti pomo [id]",       "25/5 Pomodoro timer — offers to log a note when done"),
-        ("gti find \"...\"",    "Search your notes with Claude"),
-        ("gti open [query]",    "Open notes in VSCode — optionally jump to a specific note"),
+        ("gti open [query]",    "Open notes in VSCode — describe a note to jump straight to it"),
+        ("gti do ...",           "Natural language — add a task, mark done, or log a note"),
         ("gti friend",          "Open-ended chat with your friend dude"),
     ]
 
@@ -67,7 +67,7 @@ def setup():
 
 
 @cli.command()
-@click.argument("description")
+@click.argument("description", nargs=-1)
 @click.option("--due", "-d", default=None, help="Due date (YYYY-MM-DD)")
 @click.option("--tags", "-t", default=None, help="Comma-separated tags")
 @click.option("--weekly", "-w", is_flag=True, default=False, help="Mark as this week's task")
@@ -75,8 +75,22 @@ def add(description, due, tags, weekly):
     """Add a new task to your dissertation tasks."""
     _require_setup()
     from .commands.tasks import cmd_add
+    from .config import load_config, get_anthropic_key
+    text = " ".join(description)
+    if not text:
+        console.print("[red]Please provide a task description.[/red]")
+        return
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
-    cmd_add(description, due_date=due, tags=tag_list, weekly=weekly)
+    # If no explicit metadata flags, try to parse them from the natural language text
+    if not due and not tag_list and not weekly and get_anthropic_key():
+        from .display import print_thinking
+        from .ai import parse_task_from_text
+        config = load_config()
+        print_thinking("parsing task...")
+        parsed = parse_task_from_text(text, config.get("chapters", []))
+        cmd_add(parsed["description"], due_date=parsed.get("due_date"), tags=parsed.get("tags", []), weekly=parsed.get("weekly", False))
+    else:
+        cmd_add(text, due_date=due, tags=tag_list, weekly=weekly)
 
 
 @cli.command()
@@ -106,12 +120,12 @@ def today():
 
 
 @cli.command()
-@click.argument("task_identifier")
+@click.argument("task_identifier", nargs=-1)
 def done(task_identifier):
     """Mark a task as done. Pass an ID or describe it in plain English."""
     _require_setup()
     from .commands.tasks import cmd_done
-    cmd_done(task_identifier)
+    cmd_done(" ".join(task_identifier))
 
 
 @cli.command()
@@ -155,15 +169,6 @@ def note(task_id):
     cmd_note(task_id=task_id)
 
 
-@cli.command()
-@click.argument("query", nargs=-1)
-def find(query):
-    """Search notes using Claude."""
-    _require_setup()
-    _require_api_key()
-    from .commands.find import cmd_find
-    cmd_find(" ".join(query))
-
 
 @cli.group()
 def wrap():
@@ -196,6 +201,16 @@ def open(query):
     _require_setup()
     from .commands.open_notes import cmd_open
     cmd_open(" ".join(query) if query else None)
+
+
+@cli.command()
+@click.argument("text", nargs=-1)
+def do(text):
+    """Natural language command — Claude figures out whether to add a task, mark one done, or log a note."""
+    _require_setup()
+    _require_api_key()
+    from .commands.do import cmd_do
+    cmd_do(" ".join(text))
 
 
 @cli.command()

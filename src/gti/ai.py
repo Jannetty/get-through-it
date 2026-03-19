@@ -323,33 +323,63 @@ Give them a genuine, warm end-of-week message (3-4 sentences). Acknowledge what 
     return message.content[0].text
 
 
-def find_note_file(query: str, index: list) -> str | None:
-    """Match a natural language description to a note file path. Returns absolute path or None."""
+def find_note_file(query: str, index: list, read_content: bool = False) -> str | None:
+    """Match a natural language description to a note file path. Returns absolute path or None.
+
+    If read_content=True, loads note content for a deeper search (slower, uses Sonnet).
+    """
+    from pathlib import Path
     client = get_client()
     if not client:
         return None
 
     today = datetime.now().strftime("%Y-%m-%d")
+    sorted_index = sorted(index, key=lambda x: x.get("date", ""), reverse=True)
     index_summary = "\n".join(
         f"  file: {entry.get('file', '')} | date: {entry.get('date', '')[:10]} | "
         f"type: {entry.get('tags', [''])[0] if entry.get('tags') else 'session'} | "
         f"summary: {entry.get('summary', '')}"
-        for entry in sorted(index, key=lambda x: x.get("date", ""), reverse=True)
+        for entry in sorted_index
     )
 
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=200,
-        messages=[{
-            "role": "user",
-            "content": f"""Today is {today}. The user wants to open a note matching: "{query}"
+    if read_content:
+        note_blocks = []
+        for entry in sorted_index[:20]:
+            fp = Path(entry.get("file", ""))
+            if fp.exists():
+                try:
+                    content = fp.read_text(encoding="utf-8")
+                    note_blocks.append(f"=== {entry.get('file', '')} ===\n{content[:1200]}\n")
+                except Exception:
+                    pass
+        content_block = "\n".join(note_blocks)
+        prompt = f"""Today is {today}. The user wants to open a note matching: "{query}"
+
+Note index:
+{index_summary}
+
+Note content (most recent 20):
+{content_block}
+
+Return ONLY the full file path of the single best matching note, nothing else.
+If nothing matches, return "null"."""
+        model = "claude-sonnet-4-6"
+        max_tokens = 300
+    else:
+        prompt = f"""Today is {today}. The user wants to open a note matching: "{query}"
 
 Available notes (most recent first):
 {index_summary}
 
 Return ONLY the full file path of the best matching note, nothing else.
 If nothing matches, return "null"."""
-        }],
+        model = "claude-haiku-4-5-20251001"
+        max_tokens = 200
+
+    message = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
     )
 
     text = message.content[0].text.strip()
@@ -388,6 +418,111 @@ Give them a brief, genuine end-of-day recap — acknowledge what they got done a
     )
 
     return message.content[0].text
+
+
+def parse_task_from_text(text: str, chapters: list) -> dict:
+    """Extract a clean task description + metadata from natural language.
+
+    Returns {"description": str, "due_date": str|null, "tags": [str], "weekly": bool}
+    """
+    client = get_client()
+    if not client:
+        return {"description": text, "due_date": None, "tags": [], "weekly": False}
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    chapter_list = ", ".join(f"Ch{i+1}: {ch}" for i, ch in enumerate(chapters)) if chapters else "none"
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=200,
+        messages=[{
+            "role": "user",
+            "content": f"""Today is {today}. Extract a clean task description and metadata from this input:
+
+"{text}"
+
+Dissertation chapters: {chapter_list}
+
+Return ONLY JSON:
+{{"description": "clean task description (action only, no metadata)", "due_date": "YYYY-MM-DD or null", "tags": ["ch3"], "weekly": false}}
+
+Rules:
+- description: the action itself, strip out any date/priority/chapter references
+- due_date: parse relative dates like "today", "tomorrow", "Thursday" relative to {today}; null if not mentioned
+- tags: infer from chapter references or topic keywords; use short slugs like "ch3"; empty list if unclear
+- weekly: true if they say "this week", "high priority", "urgent", or similar""",
+        }],
+    )
+
+    try:
+        import json
+        resp = message.content[0].text.strip()
+        start = resp.find("{")
+        end = resp.rfind("}") + 1
+        if start != -1 and end > start:
+            return json.loads(resp[start:end])
+    except Exception:
+        pass
+    return {"description": text, "due_date": None, "tags": [], "weekly": False}
+
+
+def parse_nl_command(text: str, tasks: list, chapters: list) -> dict:
+    """Route a natural language input to a task/note action.
+
+    Returns one of:
+    - {"action": "add_task", "description": str, "due_date": str|null, "tags": [str], "weekly": bool}
+    - {"action": "done", "task_text": str}
+    - {"action": "qn", "text": str}
+    - {"action": "unknown"}
+    """
+    client = get_client()
+    if not client:
+        return {"action": "unknown"}
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    task_list = "\n".join(
+        f"  ID {t['id']}: {t['description']} ({t['status']})"
+        for t in tasks if t.get("status") != "done"
+    ) or "  (none)"
+    chapter_list = ", ".join(f"Ch{i+1}: {ch}" for i, ch in enumerate(chapters)) if chapters else "none"
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{
+            "role": "user",
+            "content": f"""Today is {today}. The user typed a free-form command for their dissertation task tracker.
+
+Active tasks:
+{task_list}
+
+Dissertation chapters: {chapter_list}
+
+User input: "{text}"
+
+Determine intent and return ONLY JSON. Possible actions:
+- add_task: user wants to log something they did or add a new to-do
+- done: user is reporting they finished an existing task
+- qn: user wants to log an observation, reminder, or status note that isn't a formal task
+- unknown: can't determine
+
+For add_task: {{"action": "add_task", "description": "clean description", "due_date": "YYYY-MM-DD or null", "tags": ["ch3"], "weekly": false}}
+For done: {{"action": "done", "task_text": "the part describing what was finished"}}
+For qn: {{"action": "qn", "text": "the note text to log"}}
+For unknown: {{"action": "unknown"}}""",
+        }],
+    )
+
+    try:
+        import json
+        resp = message.content[0].text.strip()
+        start = resp.find("{")
+        end = resp.rfind("}") + 1
+        if start != -1 and end > start:
+            return json.loads(resp[start:end])
+    except Exception:
+        pass
+    return {"action": "unknown"}
 
 
 def parse_planning_input(user_input: str, existing_tasks: list, chapters: list) -> dict:

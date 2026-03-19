@@ -81,11 +81,12 @@ def cmd_done(task_identifier: str):
             else:
                 print_success(f"Done: {task['description']}")
 
-            # Offer a quick note
+            # Offer a quick note — typing anything starts it, Enter skips
             console.print()
-            if confirm("  Quick note on how it went?", default=False):
+            how = Prompt.ask("  [bold cyan]Quick note on how it went?[/bold cyan] [dim](Enter to skip)[/dim]", default="").strip()
+            if how:
                 from .note import cmd_quick_note
-                cmd_quick_note(task)
+                cmd_quick_note(task, how)
             return
 
     print_error(f"No task with ID {task_id}. Use [bold]gti tasks[/bold] to see IDs.")
