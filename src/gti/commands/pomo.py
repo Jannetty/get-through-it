@@ -131,11 +131,11 @@ def cmd_pomo(task_id: int = None):
     start_time = datetime.now()
     time_str = format_time(start_time)
 
-    task_line = f"**Task:** #{task['id']} — {task['description']}\n" if task else ""
+    task_line = f"**Task:** #{task['id']} — {task['description']}\n\n" if task else ""
     pre_section = (
-        f"\n## Pomodoro — {time_str}\n"
+        f"\n## Pomodoro — {time_str}\n\n"
         f"{task_line}"
-        f"**Plan:** {plan}\n"
+        f"**Plan:** {plan}\n\n"
     )
     _append_to_daily(pre_section)
 

@@ -47,7 +47,7 @@ def ensure_daily_note(d=None) -> Path:
             f"type: daily\n"
             f"tags: []\n"
             f"---\n\n"
-            f"# Daily Note — {date_str}\n",
+            f"# Daily Note — {date_str}\n\n",
             encoding="utf-8",
         )
     return path

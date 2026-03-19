@@ -156,13 +156,13 @@ def note(task_id):
 
 
 @cli.command()
-@click.argument("query")
+@click.argument("query", nargs=-1)
 def find(query):
     """Search notes using Claude."""
     _require_setup()
     _require_api_key()
     from .commands.find import cmd_find
-    cmd_find(query)
+    cmd_find(" ".join(query))
 
 
 @cli.group()
@@ -190,12 +190,12 @@ def wrap_week():
 
 
 @cli.command()
-@click.argument("query", required=False, default=None)
+@click.argument("query", nargs=-1, required=False)
 def open(query):
     """Open notes in VSCode. Optionally describe a note to jump straight to it."""
     _require_setup()
     from .commands.open_notes import cmd_open
-    cmd_open(query)
+    cmd_open(" ".join(query) if query else None)
 
 
 @cli.command()

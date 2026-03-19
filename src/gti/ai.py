@@ -185,7 +185,9 @@ def generate_day_summary(daily_note_content: str) -> str:
 
 {daily_note_content}
 
-Write a concise day summary (3-5 bullet points) capturing: what was accomplished, key decisions or insights, and what's next. Be concrete and factual — this is for future reference, not motivation. Do not restate things verbatim from the notes, synthesize them."""
+Write a concise day summary (3-5 bullet points) capturing: what was accomplished, key decisions or insights, and what's next. Be concrete and factual — this is for future reference, not motivation. Do not restate things verbatim from the notes, synthesize them.
+
+Output plain markdown bullet points (lines starting with "- "). No heading. No extra blank lines between bullets."""
         }],
     )
     return message.content[0].text
@@ -275,7 +277,7 @@ Daily note:
 
 For each chapter that has clearly relevant content in the daily note, write a brief bullet-point summary of what was done, decided, or learned about that chapter.
 
-Only include chapters with genuinely relevant content — do not stretch. Return as JSON:
+Only include chapters with genuinely relevant content — do not stretch. Each value should be plain markdown bullet points (lines starting with "- ", separated by single newlines, no blank lines between them). Return as JSON:
 {{"Ch3: chapter-name": "- bullet 1\\n- bullet 2"}}
 
 If nothing is clearly relevant to any chapter, return {{}}"""

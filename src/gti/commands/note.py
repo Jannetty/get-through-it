@@ -65,7 +65,7 @@ def cmd_qn(text: str):
     ensure_dirs()
     now = datetime.now()
     time_str = format_time(now)
-    section = f"\n## Quick Note — {time_str}\n{text}\n"
+    section = f"\n## Quick Note — {time_str}\n\n{text}\n"
 
     daily_path = ensure_daily_note()
     with open(daily_path, "a", encoding="utf-8") as f:
@@ -103,13 +103,13 @@ def _append_session_section(now: datetime, task_desc: str, answers: dict, task_i
     header = f"\n## Session — {time_str}"
     if task_desc:
         header += f" — {task_desc}"
-    header += "\n"
+    header += "\n\n"
 
     body = ""
     for key, title in SECTION_TITLES.items():
         content = answers.get(key, "").strip()
         if content:
-            body += f"\n**{title}:** {content}\n"
+            body += f"**{title}:** {content}\n\n"
 
     if not body:
         return

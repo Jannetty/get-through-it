@@ -13,6 +13,7 @@ from ..config import (
     format_time,
 )
 from ..display import print_ai_message, print_thinking, print_success, confirm
+from rich.prompt import Prompt
 
 console = Console()
 
@@ -97,8 +98,25 @@ def cmd_wrap_day():
 
         if all_updates:
             for chapter_label, chapter_content in all_updates.items():
-                _append_to_chapter_note(chapter_label, chapter_content, now)
-                console.print(f"  [green]✓[/green] Updated: {chapter_label}")
+                console.print(f"\n  [cyan]→[/cyan] [bold]{chapter_label}[/bold]")
+                for line in chapter_content.strip().splitlines()[:6]:
+                    console.print(f"    [dim]{line}[/dim]")
+                response = Prompt.ask(
+                    "  Add to this chapter note? [[bold]Y[/bold]/n/other chapter name]",
+                    default=""
+                ).strip().lower()
+                if not response or response in ("y", "yes"):
+                    _append_to_chapter_note(chapter_label, chapter_content, now)
+                    console.print(f"  [green]✓[/green] Updated: {chapter_label}")
+                elif response in ("n", "no"):
+                    console.print("  [dim]Skipped.[/dim]")
+                else:
+                    target = _match_chapter(response, chapters)
+                    if target:
+                        _append_to_chapter_note(target, chapter_content, now)
+                        console.print(f"  [green]✓[/green] Added to: {target}")
+                    else:
+                        console.print("  [dim]Couldn't match that to a chapter — skipped.[/dim]")
         else:
             console.print("[dim]No chapter-specific content found.[/dim]")
 
@@ -171,11 +189,11 @@ def cmd_wrap_week():
         f"tags: [\"weekly-wrap\"]\n"
         f"---\n\n"
         f"# Weekly Wrap — {date_str}\n\n"
-        f"## Tasks completed\n{done_md}\n\n"
-        f"## Wins\n{wins or '_(skipped)_'}\n\n"
-        f"## What didn't get done\n{stuck or '_(skipped)_'}\n\n"
-        f"## Priority next week\n{priority or '_(skipped)_'}\n\n"
-        f"## Friend's take\n{msg}\n"
+        f"## Tasks completed\n\n{done_md}\n\n"
+        f"## Wins\n\n{wins or '_(skipped)_'}\n\n"
+        f"## What didn't get done\n\n{stuck or '_(skipped)_'}\n\n"
+        f"## Priority next week\n\n{priority or '_(skipped)_'}\n\n"
+        f"## Friend's take\n\n{msg}\n"
     )
     filepath.write_text(content, encoding="utf-8")
 
@@ -197,9 +215,21 @@ def cmd_wrap_week():
         cmd_plan()
 
 
+def _match_chapter(text: str, chapters: list) -> str | None:
+    """Try to match plain-language input to a chapter label like 'Ch3: ...'"""
+    text_lower = text.lower()
+    for i, ch in enumerate(chapters):
+        label = f"Ch{i+1}: {ch}"
+        if f"ch{i+1}" in text_lower or f"chapter {i+1}" in text_lower:
+            return label
+        words = [w for w in ch.lower().split() if len(w) > 4]
+        if any(w in text_lower for w in words):
+            return label
+    return None
+
+
 def _append_to_chapter_note(chapter_label: str, content: str, now: datetime):
     """Append a dated excerpt to the appropriate chapter note file."""
-    # Derive a safe filename from the chapter label
     slug = chapter_label.lower()
     for ch in " :/()\\":
         slug = slug.replace(ch, "-")
@@ -207,10 +237,28 @@ def _append_to_chapter_note(chapter_label: str, content: str, now: datetime):
     filepath = CHAPTER_NOTES_DIR / f"{slug}.md"
 
     date_str = now.strftime("%B %d, %Y")
-    section = f"\n## {date_str}\n{content}\n"
+    section = f"\n## {date_str}\n\n{content}\n"
 
     if not filepath.exists():
-        filepath.write_text(f"# {chapter_label} — Notes\n{section}", encoding="utf-8")
+        filepath.write_text(f"# {chapter_label} — Notes\n\n{section}", encoding="utf-8")
     else:
         with open(filepath, "a", encoding="utf-8") as f:
             f.write(section)
+
+    # Register in index so gti open can find it
+    index = load_index()
+    path_str = str(filepath)
+    existing = next((e for e in index if e.get("file") == path_str), None)
+    if existing:
+        existing["date"] = now.isoformat()
+        existing["summary"] = f"{chapter_label} — last updated {now.strftime('%b %d')}"
+    else:
+        index.append({
+            "date": now.isoformat(),
+            "file": path_str,
+            "project": "dissertation",
+            "task_id": None,
+            "summary": f"{chapter_label} — notes",
+            "tags": ["chapter-note"],
+        })
+    save_index(index)
