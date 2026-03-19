@@ -185,12 +185,64 @@ def generate_day_summary(daily_note_content: str) -> str:
 
 {daily_note_content}
 
-Write a concise day summary (3-5 bullet points) capturing: what was accomplished, key decisions or insights, and what's next. Be concrete and factual — this is for future reference, not motivation. Do not restate things verbatim from the notes, synthesize them.
+Write a day summary capturing everything that happened today. Include all meetings, conversations, decisions, problems, discoveries, and progress — dissertation-related or not. If the same thread appears multiple times throughout the day, consolidate it into one bullet rather than listing it each time. The goal is: nothing excluded, but no repetition.
 
 Output plain markdown bullet points (lines starting with "- "). No heading. No extra blank lines between bullets."""
         }],
     )
     return message.content[0].text
+
+
+def revise_summary(current_summary: str, feedback: str, daily_note_content: str) -> str:
+    """Revise a day summary based on user feedback."""
+    client = get_client()
+    if not client:
+        return current_summary
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=600,
+        messages=[{
+            "role": "user",
+            "content": f"""Here is a draft day summary:
+
+{current_summary}
+
+The user wants these changes: "{feedback}"
+
+Original notes for reference:
+{daily_note_content[:3000]}
+
+Revise the summary to incorporate the user's feedback. Keep everything that was already correct. Output only the revised bullet points (lines starting with "- "), no heading.""",
+        }],
+    )
+    return message.content[0].text.strip()
+
+
+def revise_chapter_content(current_content: str, feedback: str, daily_note_content: str, chapter_label: str) -> str:
+    """Revise proposed chapter note content based on user feedback."""
+    client = get_client()
+    if not client:
+        return current_content
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=400,
+        messages=[{
+            "role": "user",
+            "content": f"""Here is a proposed update for {chapter_label}:
+
+{current_content}
+
+The user wants these changes: "{feedback}"
+
+Original daily notes for reference:
+{daily_note_content[:2000]}
+
+Revise the chapter update to incorporate the user's feedback. Output only the revised bullet points (lines starting with "- "), no heading.""",
+        }],
+    )
+    return message.content[0].text.strip()
 
 
 def parse_quick_notes(daily_note_content: str, chapters: list) -> dict:

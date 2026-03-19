@@ -24,7 +24,7 @@ def cmd_wrap_day():
     daily_path = get_daily_note_path()
 
     if not daily_path.exists():
-        console.print("[dim]No daily note for today yet — add some notes first with [bold]gti note[/bold] or [bold]gti day[/bold].[/dim]")
+        console.print("[dim]No daily note for today yet — add some notes first with [bold]gti note[/bold] or [bold]gti pomo[/bold].[/dim]")
         return
 
     content = daily_path.read_text(encoding="utf-8")
@@ -33,30 +33,37 @@ def cmd_wrap_day():
         console.print("[bold red]ANTHROPIC_API_KEY not set — needed for wrap.[/bold red]")
         return
 
-    # Generate and append day summary
+    from ..ai import generate_day_summary, revise_summary, parse_quick_notes, extract_chapter_updates, revise_chapter_content
+
+    # ── Step 1: Day summary with approval loop ──────────────────────────────
     print_thinking("reading today's notes...")
-    from ..ai import generate_day_summary
     summary = generate_day_summary(content)
 
-    print_ai_message(summary, title="day summary", mood="cheer")
+    while True:
+        print_ai_message(summary, title="day summary draft", mood="cheer")
+        response = Prompt.ask(
+            "\n  Approve this summary? [[bold]Y[/bold]/feedback to revise]",
+            default=""
+        ).strip()
+        if not response or response.lower() in ("y", "yes"):
+            break
+        print_thinking("revising...")
+        summary = revise_summary(summary, response, content)
 
     time_str = format_time(now)
     summary_section = f"\n---\n\n## Day Summary — {time_str}\n\n{summary}\n"
     with open(daily_path, "a", encoding="utf-8") as f:
         f.write(summary_section)
-
     update_index_entry(str(daily_path), {"summary": f"Daily note — {now.strftime('%b %d')} (wrapped)"})
 
-    # Parse quick notes for tasks and chapter observations
+    # ── Step 2: Quick notes → potential tasks ───────────────────────────────
     config = load_config()
     chapters = config.get("chapters", [])
 
     if chapters:
-        console.print("[dim]Parsing quick notes...[/dim]")
-        from ..ai import parse_quick_notes, extract_chapter_updates
+        console.print("\n[dim]Parsing quick notes for action items...[/dim]")
         qn_parsed = parse_quick_notes(content, chapters)
 
-        # Offer to create tasks from action items
         potential_tasks = qn_parsed.get("potential_tasks", [])
         if potential_tasks:
             console.print(f"\n[bold]Found {len(potential_tasks)} potential task(s) in your quick notes:[/bold]")
@@ -65,12 +72,11 @@ def cmd_wrap_day():
             for item in potential_tasks:
                 console.print(f"\n  [cyan]→[/cyan] {item}")
                 if confirm("  Add as a task?", default=True):
-                    from datetime import datetime as dt
                     task = {
                         "id": get_next_task_id(tasks),
                         "description": item,
                         "status": "todo",
-                        "created_at": dt.now().isoformat(),
+                        "created_at": now.isoformat(),
                         "due_date": None,
                         "tags": [],
                         "weekly": False,
@@ -81,14 +87,11 @@ def cmd_wrap_day():
             if any_added:
                 save_tasks(tasks)
 
-        # Route chapter observations to chapter notes
-        chapter_obs = qn_parsed.get("chapter_observations", {})
-
-        # Also extract general chapter updates from session notes
-        console.print("[dim]Checking for chapter-relevant content...[/dim]")
+        # ── Step 3: Chapter note assignments with approval loop ──────────────
+        console.print("\n[dim]Identifying chapter-relevant content...[/dim]")
         all_updates = extract_chapter_updates(content, chapters)
 
-        # Merge: chapter_obs entries go into chapter notes too
+        chapter_obs = qn_parsed.get("chapter_observations", {})
         for chapter_label, obs_list in chapter_obs.items():
             obs_text = "\n".join(f"- {o}" for o in obs_list)
             if chapter_label in all_updates:
@@ -97,30 +100,35 @@ def cmd_wrap_day():
                 all_updates[chapter_label] = obs_text
 
         if all_updates:
-            for chapter_label, chapter_content in all_updates.items():
-                console.print(f"\n  [cyan]→[/cyan] [bold]{chapter_label}[/bold]")
-                for line in chapter_content.strip().splitlines()[:6]:
-                    console.print(f"    [dim]{line}[/dim]")
-                response = Prompt.ask(
-                    "  Add to this chapter note? [[bold]Y[/bold]/n/other chapter name]",
-                    default=""
-                ).strip().lower()
-                if not response or response in ("y", "yes"):
-                    _append_to_chapter_note(chapter_label, chapter_content, now)
-                    console.print(f"  [green]✓[/green] Updated: {chapter_label}")
-                elif response in ("n", "no"):
-                    console.print("  [dim]Skipped.[/dim]")
-                else:
-                    target = _match_chapter(response, chapters)
-                    if target:
-                        _append_to_chapter_note(target, chapter_content, now)
-                        console.print(f"  [green]✓[/green] Added to: {target}")
+            console.print(f"\n[bold]Found content for {len(all_updates)} chapter(s):[/bold]")
+            for chapter_label, chapter_content in list(all_updates.items()):
+                while True:
+                    console.print(f"\n  [cyan]→[/cyan] [bold]{chapter_label}[/bold]")
+                    for line in chapter_content.strip().splitlines():
+                        console.print(f"    [dim]{line}[/dim]")
+                    response = Prompt.ask(
+                        "  Add to chapter note? [[bold]Y[/bold]/n/feedback/other chapter name]",
+                        default=""
+                    ).strip()
+                    if not response or response.lower() in ("y", "yes"):
+                        _append_to_chapter_note(chapter_label, chapter_content, now)
+                        console.print(f"  [green]✓[/green] Updated: {chapter_label}")
+                        break
+                    elif response.lower() in ("n", "no"):
+                        console.print("  [dim]Skipped.[/dim]")
+                        break
                     else:
-                        console.print("  [dim]Couldn't match that to a chapter — skipped.[/dim]")
+                        target = _match_chapter(response, chapters)
+                        if target:
+                            _append_to_chapter_note(target, chapter_content, now)
+                            console.print(f"  [green]✓[/green] Added to: {target}")
+                            break
+                        # Otherwise treat as revision feedback
+                        print_thinking("revising...")
+                        chapter_content = revise_chapter_content(chapter_content, response, content, chapter_label)
         else:
             console.print("[dim]No chapter-specific content found.[/dim]")
 
-    update_index_entry(str(daily_path), {"summary": f"Daily note — {now.strftime('%b %d')} (wrapped)"})
     console.print(f"\n[dim]Day wrapped. Use [bold]gti open[/bold] to browse your notes.[/dim]")
 
 
