@@ -375,6 +375,63 @@ Give them a genuine, warm end-of-week message (3-4 sentences). Acknowledge what 
     return message.content[0].text
 
 
+def parse_set_command(args_str: str, tasks: list, today: str) -> dict | None:
+    """Parse a natural language set command into {task_id, changes}.
+
+    changes can include: status, priority, due_date (YYYY-MM-DD).
+    Returns None if the command can't be parsed.
+    """
+    client = get_client()
+    if not client:
+        return None
+
+    task_list = "\n".join(
+        f"- ID {t['id']}: {t['description']} (status: {t.get('status', 'todo')}, priority: {t.get('priority', 'none')})"
+        for t in tasks
+    )
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=150,
+        messages=[{
+            "role": "user",
+            "content": f"""Today's date: {today}
+
+Tasks:
+{task_list}
+
+User command: "{args_str}"
+
+Parse which task to update and what changes to apply. Return JSON only:
+{{
+  "task_id": <integer>,
+  "changes": {{
+    "status": "todo|in-progress|done",
+    "priority": "high|medium|low|none",
+    "due_date": "YYYY-MM-DD"
+  }}
+}}
+
+Only include keys in "changes" that are explicitly being set. Return null if unparseable.""",
+        }],
+    )
+
+    try:
+        import json as _json
+        text = message.content[0].text.strip()
+        if text.lower().startswith("null"):
+            return None
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            result = _json.loads(text[start:end])
+            if result.get("task_id") and result.get("changes"):
+                return result
+    except Exception:
+        pass
+    return None
+
+
 def filter_duplicate_tasks(potential_tasks: list, existing_tasks: list) -> list:
     """Return only tasks that aren't already covered by an existing task (semantic match)."""
     if not existing_tasks or not potential_tasks:

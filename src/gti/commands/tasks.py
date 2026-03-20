@@ -206,6 +206,33 @@ def _parse_trailing(args: list[str], resolver):
     return None, args
 
 
+def _apply_ai_changes(task_id: int, changes: dict, tasks: list):
+    """Apply AI-parsed changes {status?, priority?, due_date?} to a task and save."""
+    for task in tasks:
+        if task["id"] == task_id:
+            msgs = []
+            if "status" in changes:
+                old = task["status"]
+                task["status"] = changes["status"]
+                if changes["status"] == "done" and "completed_at" not in task:
+                    task["completed_at"] = datetime.now().isoformat()
+                msgs.append(f"status: [dim]{old}[/dim] → [bold]{changes['status']}[/bold]")
+            if "priority" in changes:
+                old = task.get("priority", "unset")
+                task["priority"] = changes["priority"]
+                label = changes["priority"] or "unset"
+                msgs.append(f"priority: [dim]{old}[/dim] → [bold]{label}[/bold]")
+            if "due_date" in changes:
+                old = task.get("due_date") or "unset"
+                task["due_date"] = changes["due_date"]
+                msgs.append(f"due: [dim]{old}[/dim] → [bold]{changes['due_date']}[/bold]")
+            save_tasks(tasks)
+            for m in msgs:
+                console.print(f"[green]✓[/green] [bold]#{task_id}[/bold] {m}")
+            return
+    print_error(f"No task with ID {task_id}.")
+
+
 def cmd_set(args: list[str]):
     """Set a task's status or priority level."""
     if not args:
@@ -243,6 +270,17 @@ def cmd_set(args: list[str]):
             value = pri_val
 
     if setting_type is None:
+        # Fall back to AI for complex commands (multiple fields, natural language dates, etc.)
+        if get_anthropic_key():
+            print_thinking("parsing command...")
+            from ..ai import parse_set_command
+            from datetime import date as _date
+            tasks = load_tasks()
+            active = [t for t in tasks if t.get("status") != "done"]
+            result = parse_set_command(" ".join(args), active, _date.today().isoformat())
+            if result:
+                _apply_ai_changes(result["task_id"], result.get("changes", {}), tasks)
+                return
         print_error(
             "Couldn't find a status or priority in that.\n"
             "  Status: [bold]in-progress[/bold], [bold]done[/bold], [bold]todo[/bold]\n"
