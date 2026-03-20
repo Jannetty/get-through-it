@@ -375,6 +375,146 @@ Give them a genuine, warm end-of-week message (3-4 sentences). Acknowledge what 
     return message.content[0].text
 
 
+def filter_duplicate_tasks(potential_tasks: list, existing_tasks: list) -> list:
+    """Return only tasks that aren't already covered by an existing task (semantic match)."""
+    if not existing_tasks or not potential_tasks:
+        return potential_tasks
+
+    client = get_client()
+    if not client:
+        return potential_tasks
+
+    existing_list = "\n".join(f"- {t}" for t in existing_tasks)
+    new_list = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(potential_tasks))
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=100,
+        messages=[{
+            "role": "user",
+            "content": f"""Existing tasks:
+{existing_list}
+
+New suggested tasks (numbered):
+{new_list}
+
+Which numbered tasks are already covered by an existing task (same meaning, even if worded differently)?
+Return ONLY a JSON array of the duplicate numbers, e.g. [1, 3]. Return [] if none are duplicates.""",
+        }],
+    )
+
+    try:
+        import re
+        text = message.content[0].text.strip()
+        match = re.search(r"\[.*?\]", text, re.DOTALL)
+        if match:
+            import json as _json
+            duplicate_indices = set(_json.loads(match.group()))
+            return [t for i, t in enumerate(potential_tasks) if (i + 1) not in duplicate_indices]
+    except Exception:
+        pass
+    return potential_tasks
+
+
+def split_chapter_content(instruction: str, content: str, chapters: list) -> dict:
+    """Split bullet content across chapters per user instruction.
+
+    Returns {chapter_label: bullets_str} or empty dict on failure.
+    """
+    client = get_client()
+    if not client:
+        return {}
+
+    chapter_list = "\n".join(f"- Ch{i + 1}: {ch}" for i, ch in enumerate(chapters))
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=600,
+        messages=[{
+            "role": "user",
+            "content": f"""The user wants to split these notes across chapters.
+
+User instruction: "{instruction}"
+
+Content to split:
+{content}
+
+Available chapters:
+{chapter_list}
+
+Split the bullets according to the user's instruction. Return JSON:
+{{"Ch2: chapter-name": "- bullet\\n- bullet", "Ch3: chapter-name": "- bullet"}}
+
+Use exact chapter labels from the list above. Only include chapters that receive at least one bullet.""",
+        }],
+    )
+
+    try:
+        import json as _json
+        text = message.content[0].text.strip()
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start != -1 and end > start:
+            return _json.loads(text[start:end])
+    except Exception:
+        pass
+    return {}
+
+
+def generate_month_summary(month_notes_content: str, done_tasks: list, wins: str, stuck: str, priority: str) -> str:
+    """Generate a monthly wrap summary."""
+    client = get_client()
+    if not client:
+        return ""
+
+    system = build_system_prompt()
+    done_list = "\n".join(f"- {t['description']}" for t in done_tasks) if done_tasks else "_(none logged)_"
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=600,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": f"""It's the end of the month. Here's the user's reflection:
+- Tasks completed: {done_list}
+- Wins: {wins or 'not shared'}
+- What didn't get done: {stuck or 'not shared'}
+- Priority next month: {priority or 'not shared'}
+
+Give them a genuine, warm end-of-month message (4-5 sentences). Acknowledge the arc of the month — what they built toward, what they pushed through. End with something grounding and forward-looking."""
+        }],
+    )
+    return message.content[0].text
+
+
+def generate_year_summary(year_notes_content: str, done_tasks: list, wins: str, stuck: str, priority: str) -> str:
+    """Generate a yearly wrap summary."""
+    client = get_client()
+    if not client:
+        return ""
+
+    system = build_system_prompt()
+    done_list = "\n".join(f"- {t['description']}" for t in done_tasks) if done_tasks else "_(none logged)_"
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=700,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": f"""It's the end of the year. Here's the user's reflection:
+- Tasks completed: {done_list}
+- Biggest wins: {wins or 'not shared'}
+- What didn't happen: {stuck or 'not shared'}
+- Priority next year: {priority or 'not shared'}
+
+Give them a genuine, warm end-of-year message (5-6 sentences). Honor the weight of a full year of work on a dissertation. Acknowledge what they actually shared. End with something honest and hopeful about the year ahead."""
+        }],
+    )
+    return message.content[0].text
+
+
 def find_note_file(query: str, index: list, read_content: bool = False) -> str | None:
     """Match a natural language description to a note file path. Returns absolute path or None.
 

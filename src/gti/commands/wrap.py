@@ -1,6 +1,7 @@
 """End-of-day and end-of-week wrap commands."""
 
-from datetime import datetime, timedelta
+import calendar as cal_module
+from datetime import datetime, timedelta, date as date_type
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
@@ -13,18 +14,88 @@ from ..config import (
     format_time, chapter_note_slug,
 )
 from ..display import print_ai_message, print_thinking, print_success, confirm
-from rich.prompt import Prompt
 
 console = Console()
 
 
-def cmd_wrap_day():
+def _parse_target_day(date_str):
+    """Parse a day arg. Returns date object, or None on error."""
+    now = datetime.now()
+    if not date_str:
+        return now.date()
+    if date_str.lower() == "yesterday":
+        return (now - timedelta(days=1)).date()
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        console.print(f"[bold red]Invalid date '{date_str}'. Use YYYY-MM-DD or 'yesterday'.[/bold red]")
+        return None
+
+
+def _parse_target_week(date_str):
+    """Parse a week anchor arg. Returns Monday of the target calendar week, or None on error."""
+    now = datetime.now()
+    if not date_str:
+        anchor = now.date()
+    elif date_str.lower() == "last":
+        anchor = (now - timedelta(weeks=1)).date()
+    else:
+        try:
+            anchor = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            console.print(f"[bold red]Invalid date '{date_str}'. Use YYYY-MM-DD or 'last'.[/bold red]")
+            return None
+    return anchor - timedelta(days=anchor.weekday())
+
+
+def _parse_target_month(month_str):
+    """Parse a month arg (YYYY-MM or 'last'). Returns (year, month) tuple, or None on error."""
+    now = datetime.now()
+    if not month_str:
+        return now.year, now.month
+    if month_str.lower() == "last":
+        d = now.replace(day=1) - timedelta(days=1)
+        return d.year, d.month
+    try:
+        d = datetime.strptime(month_str, "%Y-%m")
+        return d.year, d.month
+    except ValueError:
+        console.print(f"[bold red]Invalid month '{month_str}'. Use YYYY-MM or 'last'.[/bold red]")
+        return None
+
+
+def _parse_target_year(year_str):
+    """Parse a year arg (YYYY or 'last'). Returns int year, or None on error."""
+    now = datetime.now()
+    if not year_str:
+        return now.year
+    if year_str.lower() == "last":
+        return now.year - 1
+    try:
+        y = int(year_str)
+        if 2000 <= y <= 2100:
+            return y
+    except (ValueError, TypeError):
+        pass
+    console.print(f"[bold red]Invalid year '{year_str}'. Use YYYY or 'last'.[/bold red]")
+    return None
+
+
+def cmd_wrap_day(date_str=None):
     ensure_dirs()
     now = datetime.now()
-    daily_path = get_daily_note_path()
+
+    target_date = _parse_target_day(date_str)
+    if target_date is None:
+        return
+
+    is_past = target_date < now.date()
+    target_dt = datetime.combine(target_date, datetime.min.time())
+    daily_path = get_daily_note_path(target_date)
 
     if not daily_path.exists():
-        console.print("[dim]No daily note for today yet — add some notes first with [bold]gti note[/bold] or [bold]gti pomo[/bold].[/dim]")
+        date_label = target_date.strftime("%B %d, %Y")
+        console.print(f"[dim]No daily note found for {date_label} — nothing to wrap.[/dim]")
         return
 
     content = daily_path.read_text(encoding="utf-8")
@@ -33,10 +104,14 @@ def cmd_wrap_day():
         console.print("[bold red]ANTHROPIC_API_KEY not set — needed for wrap.[/bold red]")
         return
 
-    from ..ai import generate_day_summary, revise_summary, parse_quick_notes, extract_chapter_updates, revise_chapter_content
+    from ..ai import generate_day_summary, revise_summary, parse_quick_notes, extract_chapter_updates, revise_chapter_content, filter_duplicate_tasks, split_chapter_content
+
+    date_label = target_date.strftime("%B %d")
+    if is_past:
+        console.print(f"[dim]Wrapping [bold]{date_label}[/bold] (past day)...[/dim]\n")
 
     # ── Step 1: Day summary with approval loop ──────────────────────────────
-    print_thinking("reading today's notes...")
+    print_thinking(f"reading {'today' if not is_past else date_label + chr(39) + 's'} notes...")
     summary = generate_day_summary(content)
 
     while True:
@@ -54,7 +129,7 @@ def cmd_wrap_day():
     summary_section = f"\n---\n\n## Day Summary — {time_str}\n\n{summary}\n"
     with open(daily_path, "a", encoding="utf-8") as f:
         f.write(summary_section)
-    update_index_entry(str(daily_path), {"summary": f"Daily note — {now.strftime('%b %d')} (wrapped)"})
+    update_index_entry(str(daily_path), {"summary": f"Daily note — {target_date.strftime('%b %d')} (wrapped)"})
 
     # ── Step 2: Quick notes → potential tasks ───────────────────────────────
     config = load_config()
@@ -65,6 +140,12 @@ def cmd_wrap_day():
         qn_parsed = parse_quick_notes(content, chapters)
 
         potential_tasks = qn_parsed.get("potential_tasks", [])
+        if potential_tasks:
+            tasks = load_tasks()
+            existing_descriptions = [t["description"] for t in tasks if t.get("status") != "done"]
+            if existing_descriptions:
+                console.print("\n[dim]Checking for duplicate tasks...[/dim]")
+                potential_tasks = filter_duplicate_tasks(potential_tasks, existing_descriptions)
         if potential_tasks:
             console.print(f"\n[bold]Found {len(potential_tasks)} potential task(s) in your quick notes:[/bold]")
             tasks = load_tasks()
@@ -111,16 +192,26 @@ def cmd_wrap_day():
                         default=""
                     ).strip()
                     if not response or response.lower() in ("y", "yes"):
-                        _append_to_chapter_note(chapter_label, chapter_content, now)
+                        _append_to_chapter_note(chapter_label, chapter_content, target_dt)
                         console.print(f"  [green]✓[/green] Updated: {chapter_label}")
                         break
                     elif response.lower() in ("n", "no"):
                         console.print("  [dim]Skipped.[/dim]")
                         break
                     else:
+                        # Check for split routing (multiple chapters mentioned)
+                        if _count_chapters_mentioned(response, chapters) >= 2:
+                            print_thinking("splitting across chapters...")
+                            splits = split_chapter_content(response, chapter_content, chapters)
+                            if splits:
+                                for split_label, split_text in splits.items():
+                                    _append_to_chapter_note(split_label, split_text, target_dt)
+                                    console.print(f"  [green]✓[/green] Added to: {split_label}")
+                                break
+                        # Single chapter redirect
                         target = _match_chapter(response, chapters)
                         if target:
-                            _append_to_chapter_note(target, chapter_content, now)
+                            _append_to_chapter_note(target, chapter_content, target_dt)
                             console.print(f"  [green]✓[/green] Added to: {target}")
                             break
                         # Otherwise treat as revision feedback
@@ -132,29 +223,39 @@ def cmd_wrap_day():
     console.print(f"\n[dim]Day wrapped. Use [bold]gti open[/bold] to browse your notes.[/dim]")
 
 
-def cmd_wrap_week():
+def cmd_wrap_week(date_str=None):
     ensure_dirs()
     now = datetime.now()
 
-    # Collect this week's daily notes
+    monday = _parse_target_week(date_str)
+    if monday is None:
+        return
+    sunday = monday + timedelta(days=6)
+    is_past = sunday < now.date()
+
+    week_label = f"{monday.strftime('%b %d')}–{sunday.strftime('%b %d, %Y')}"
+
+    # Collect Mon–Sun daily notes
     week_notes = []
-    for i in range(7):
-        d = (now - timedelta(days=i)).date()
+    d = monday
+    while d <= sunday:
         path = get_daily_note_path(d)
         if path.exists():
             week_notes.append((d, path.read_text(encoding="utf-8")))
+        d += timedelta(days=1)
 
     tasks = load_tasks()
-    week_ago = now - timedelta(days=7)
+    week_start_dt = datetime.combine(monday, datetime.min.time())
+    week_end_dt = datetime.combine(sunday + timedelta(days=1), datetime.min.time())
     done_this_week = [
         t for t in tasks
         if t.get("status") == "done"
         and t.get("completed_at")
-        and datetime.fromisoformat(t["completed_at"]) >= week_ago
+        and week_start_dt <= datetime.fromisoformat(t["completed_at"]) < week_end_dt
     ]
 
     console.print(Panel(
-        "[bold]Weekly Wrap[/bold]\n[dim]Let's close out the week.[/dim]",
+        f"[bold]Weekly Wrap — {week_label}[/bold]\n[dim]Let's close out the week.[/dim]",
         border_style="blue",
         padding=(1, 2),
     ))
@@ -183,27 +284,26 @@ def cmd_wrap_week():
     msg = generate_week_summary(week_content, done_this_week, wins, stuck, priority)
     print_ai_message(msg, title="week wrap", mood="cheer")
 
-    # Save weekly note
-    date_str = now.strftime("%B %d, %Y")
-    filename = now.strftime("%Y-%m-%d") + "-weekly-wrap.md"
+    # Save weekly note — filename anchored to Monday of that week
+    filename = monday.strftime("%Y-%m-%d") + "-weekly-wrap.md"
     filepath = NOTES_DIR / filename
 
     done_md = "\n".join(f"- {t['description']}" for t in done_this_week) or "_(none logged)_"
-    content = (
+    file_content = (
         f"---\n"
         f"date: {now.isoformat()}\n"
         f"project: dissertation\n"
         f"type: weekly-wrap\n"
         f"tags: [\"weekly-wrap\"]\n"
         f"---\n\n"
-        f"# Weekly Wrap — {date_str}\n\n"
+        f"# Weekly Wrap — {week_label}\n\n"
         f"## Tasks completed\n\n{done_md}\n\n"
         f"## Wins\n\n{wins or '_(skipped)_'}\n\n"
         f"## What didn't get done\n\n{stuck or '_(skipped)_'}\n\n"
         f"## Priority next week\n\n{priority or '_(skipped)_'}\n\n"
         f"## Friend's take\n\n{msg}\n"
     )
-    filepath.write_text(content, encoding="utf-8")
+    filepath.write_text(file_content, encoding="utf-8")
 
     index = load_index()
     index.append({
@@ -211,16 +311,228 @@ def cmd_wrap_week():
         "file": str(filepath),
         "project": "dissertation",
         "task_id": None,
-        "summary": f"Weekly wrap — {now.strftime('%b %d')}",
+        "summary": f"Weekly wrap — {week_label}",
         "tags": ["weekly-wrap"],
     })
     save_index(index)
 
-    print_success(f"Weekly wrap saved.")
+    print_success("Weekly wrap saved.")
 
-    if confirm("\nPlan next week now?", default=True):
+    if not is_past and confirm("\nPlan next week now?", default=True):
         from .plan import cmd_plan
         cmd_plan()
+
+
+def cmd_wrap_month(month_str=None):
+    ensure_dirs()
+    now = datetime.now()
+
+    result = _parse_target_month(month_str)
+    if result is None:
+        return
+    target_year, target_month = result
+
+    _, last_day = cal_module.monthrange(target_year, target_month)
+    month_notes = []
+    for day in range(1, last_day + 1):
+        d = date_type(target_year, target_month, day)
+        path = get_daily_note_path(d)
+        if path.exists():
+            month_notes.append((d, path.read_text(encoding="utf-8")))
+
+    month_dt = datetime(target_year, target_month, 1)
+    month_label = month_dt.strftime("%B %Y")
+    is_past = (target_year, target_month) < (now.year, now.month)
+
+    if not month_notes:
+        console.print(f"[dim]No daily notes found for {month_label} — nothing to wrap.[/dim]")
+        return
+
+    tasks = load_tasks()
+    month_start_dt = datetime(target_year, target_month, 1)
+    month_end_dt = datetime(target_year, target_month, last_day, 23, 59, 59)
+    done_this_month = [
+        t for t in tasks
+        if t.get("status") == "done"
+        and t.get("completed_at")
+        and month_start_dt <= datetime.fromisoformat(t["completed_at"]) <= month_end_dt
+    ]
+
+    console.print(Panel(
+        f"[bold]Monthly Wrap — {month_label}[/bold]\n[dim]Let's reflect on the month ({len(month_notes)} days with notes).[/dim]",
+        border_style="blue",
+        padding=(1, 2),
+    ))
+
+    if done_this_month:
+        console.print(f"\n[bold green]Completed this month ({len(done_this_month)} tasks):[/bold green]")
+        for t in done_this_month:
+            console.print(f"  [green]✓[/green] {t['description']}")
+    else:
+        console.print("\n[dim]No tasks marked done this month.[/dim]")
+
+    console.print()
+    wins = Prompt.ask("[bold cyan]What were your wins this month?[/bold cyan]", default="").strip()
+    console.print()
+    stuck = Prompt.ask("[bold cyan]What didn't get done, and why?[/bold cyan]", default="").strip()
+    console.print()
+    priority = Prompt.ask("[bold cyan]Main priority for next month?[/bold cyan]", default="").strip()
+
+    if not get_anthropic_key():
+        console.print("[bold red]ANTHROPIC_API_KEY not set — needed for wrap.[/bold red]")
+        return
+
+    print_thinking("reflecting on your month...")
+    from ..ai import generate_month_summary
+    month_content = "\n\n---\n\n".join(content for _, content in month_notes)
+    msg = generate_month_summary(month_content, done_this_month, wins, stuck, priority)
+    print_ai_message(msg, title="month wrap", mood="cheer")
+
+    filename = month_dt.strftime("%Y-%m") + "-monthly-wrap.md"
+    filepath = NOTES_DIR / filename
+
+    done_md = "\n".join(f"- {t['description']}" for t in done_this_month) or "_(none logged)_"
+    file_content = (
+        f"---\n"
+        f"date: {now.isoformat()}\n"
+        f"project: dissertation\n"
+        f"type: monthly-wrap\n"
+        f"tags: [\"monthly-wrap\"]\n"
+        f"---\n\n"
+        f"# Monthly Wrap — {month_label}\n\n"
+        f"## Tasks completed\n\n{done_md}\n\n"
+        f"## Wins\n\n{wins or '_(skipped)_'}\n\n"
+        f"## What didn't get done\n\n{stuck or '_(skipped)_'}\n\n"
+        f"## Priority next month\n\n{priority or '_(skipped)_'}\n\n"
+        f"## Friend's take\n\n{msg}\n"
+    )
+    filepath.write_text(file_content, encoding="utf-8")
+
+    index = load_index()
+    index.append({
+        "date": now.isoformat(),
+        "file": str(filepath),
+        "project": "dissertation",
+        "task_id": None,
+        "summary": f"Monthly wrap — {month_label}",
+        "tags": ["monthly-wrap"],
+    })
+    save_index(index)
+
+    print_success("Monthly wrap saved.")
+
+
+def cmd_wrap_year(year_str=None):
+    ensure_dirs()
+    now = datetime.now()
+
+    target_year = _parse_target_year(year_str)
+    if target_year is None:
+        return
+
+    is_past = target_year < now.year
+
+    # Gather content: prefer wrap files (monthly/weekly), fall back to daily notes
+    all_year_files = sorted(NOTES_DIR.glob(f"{target_year}-*.md"))
+    wrap_files = [f for f in all_year_files if "wrap" in f.name]
+    daily_files = [f for f in all_year_files if "daily" in f.name]
+
+    content_parts = []
+    total_chars = 0
+    MAX_CHARS = 12000
+
+    for f in wrap_files:
+        text = f.read_text(encoding="utf-8")
+        content_parts.append(text[:3000])
+        total_chars += min(len(text), 3000)
+        if total_chars >= MAX_CHARS:
+            break
+
+    if total_chars < MAX_CHARS:
+        for f in daily_files:
+            text = f.read_text(encoding="utf-8")
+            snippet = text[:400]
+            content_parts.append(snippet)
+            total_chars += len(snippet)
+            if total_chars >= MAX_CHARS:
+                break
+
+    if not content_parts:
+        console.print(f"[dim]No notes found for {target_year} — nothing to wrap.[/dim]")
+        return
+
+    tasks = load_tasks()
+    year_start_dt = datetime(target_year, 1, 1)
+    year_end_dt = datetime(target_year, 12, 31, 23, 59, 59)
+    done_this_year = [
+        t for t in tasks
+        if t.get("status") == "done"
+        and t.get("completed_at")
+        and year_start_dt <= datetime.fromisoformat(t["completed_at"]) <= year_end_dt
+    ]
+
+    console.print(Panel(
+        f"[bold]Yearly Wrap — {target_year}[/bold]\n[dim]Let's reflect on the year ({len(daily_files)} days with notes).[/dim]",
+        border_style="blue",
+        padding=(1, 2),
+    ))
+
+    if done_this_year:
+        console.print(f"\n[bold green]Completed this year ({len(done_this_year)} tasks):[/bold green]")
+        for t in done_this_year:
+            console.print(f"  [green]✓[/green] {t['description']}")
+    else:
+        console.print("\n[dim]No tasks marked done this year.[/dim]")
+
+    console.print()
+    wins = Prompt.ask("[bold cyan]What were your biggest wins this year?[/bold cyan]", default="").strip()
+    console.print()
+    stuck = Prompt.ask("[bold cyan]What didn't happen, and why?[/bold cyan]", default="").strip()
+    console.print()
+    priority = Prompt.ask("[bold cyan]Main priority for next year?[/bold cyan]", default="").strip()
+
+    if not get_anthropic_key():
+        console.print("[bold red]ANTHROPIC_API_KEY not set — needed for wrap.[/bold red]")
+        return
+
+    print_thinking("reflecting on your year...")
+    from ..ai import generate_year_summary
+    year_content = "\n\n---\n\n".join(content_parts)
+    msg = generate_year_summary(year_content, done_this_year, wins, stuck, priority)
+    print_ai_message(msg, title="year wrap", mood="cheer")
+
+    filename = f"{target_year}-yearly-wrap.md"
+    filepath = NOTES_DIR / filename
+
+    done_md = "\n".join(f"- {t['description']}" for t in done_this_year) or "_(none logged)_"
+    file_content = (
+        f"---\n"
+        f"date: {now.isoformat()}\n"
+        f"project: dissertation\n"
+        f"type: yearly-wrap\n"
+        f"tags: [\"yearly-wrap\"]\n"
+        f"---\n\n"
+        f"# Yearly Wrap — {target_year}\n\n"
+        f"## Tasks completed\n\n{done_md}\n\n"
+        f"## Wins\n\n{wins or '_(skipped)_'}\n\n"
+        f"## What didn't happen\n\n{stuck or '_(skipped)_'}\n\n"
+        f"## Priority next year\n\n{priority or '_(skipped)_'}\n\n"
+        f"## Friend's take\n\n{msg}\n"
+    )
+    filepath.write_text(file_content, encoding="utf-8")
+
+    index = load_index()
+    index.append({
+        "date": now.isoformat(),
+        "file": str(filepath),
+        "project": "dissertation",
+        "task_id": None,
+        "summary": f"Yearly wrap — {target_year}",
+        "tags": ["yearly-wrap"],
+    })
+    save_index(index)
+
+    print_success("Yearly wrap saved.")
 
 
 def _match_chapter(text: str, chapters: list) -> str | None:
@@ -234,6 +546,20 @@ def _match_chapter(text: str, chapters: list) -> str | None:
         if any(w in text_lower for w in words):
             return label
     return None
+
+
+def _count_chapters_mentioned(text: str, chapters: list) -> int:
+    """Count how many distinct chapters are referenced in text."""
+    text_lower = text.lower()
+    count = 0
+    for i, ch in enumerate(chapters):
+        if f"ch{i+1}" in text_lower or f"chapter {i+1}" in text_lower:
+            count += 1
+        else:
+            words = [w for w in ch.lower().split() if len(w) > 4]
+            if any(w in text_lower for w in words):
+                count += 1
+    return count
 
 
 def _append_to_chapter_note(chapter_label: str, content: str, now: datetime):

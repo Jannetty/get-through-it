@@ -180,21 +180,56 @@ def wrap():
 
 
 @wrap.command(name="day")
-def wrap_day():
-    """Synthesize today's notes, append a summary, and update chapter notes."""
+@click.argument("date", required=False, default=None, metavar="[DATE]")
+def wrap_day(date):
+    """Synthesize a day's notes, append a summary, and update chapter notes.
+
+    DATE can be YYYY-MM-DD or 'yesterday'. Defaults to today.
+    """
     _require_setup()
     _require_api_key()
     from .commands.wrap import cmd_wrap_day
-    cmd_wrap_day()
+    cmd_wrap_day(date)
 
 
 @wrap.command(name="week")
-def wrap_week():
-    """Close out the week — reflection, summary, and chapter note updates."""
+@click.argument("date", required=False, default=None, metavar="[DATE]")
+def wrap_week(date):
+    """Close out the week — reflection, summary, and chapter note updates.
+
+    DATE anchors to the calendar week (Mon–Sun) containing that day.
+    Use YYYY-MM-DD or 'last'. Defaults to the current week.
+    """
     _require_setup()
     _require_api_key()
     from .commands.wrap import cmd_wrap_week
-    cmd_wrap_week()
+    cmd_wrap_week(date)
+
+
+@wrap.command(name="month")
+@click.argument("month", required=False, default=None, metavar="[MONTH]")
+def wrap_month(month):
+    """Reflect on a full month across all daily notes.
+
+    MONTH should be YYYY-MM or 'last'. Defaults to the current month.
+    """
+    _require_setup()
+    _require_api_key()
+    from .commands.wrap import cmd_wrap_month
+    cmd_wrap_month(month)
+
+
+@wrap.command(name="year")
+@click.argument("year", required=False, default=None, metavar="[YEAR]")
+def wrap_year(year):
+    """Reflect on a full year of notes.
+
+    YEAR should be YYYY or 'last'. Defaults to the current year.
+    """
+    _require_setup()
+    _require_api_key()
+    from .commands.wrap import cmd_wrap_year
+    cmd_wrap_year(year)
 
 
 @cli.command()
