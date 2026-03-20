@@ -36,7 +36,7 @@ def help_cmd():
         ("gti add \"...\"",     "Add a task manually"),
         ("gti done <id|text>",  "Mark a task done — pass an ID or describe it in plain English"),
         ("gti set <task> <value>", "Set status (in-progress/done/todo) or priority (high/medium/low/none)"),
-        ("gti reorder",         "Manually set task priority order"),
+
         ("gti plan",            "Claude helps you pick this week's focus and ranks your tasks"),
         ("gti today",           "Daily view + a message from your friend dude"),
         ("gti note",            "Structured session note — appended to today's daily note"),
@@ -137,13 +137,6 @@ def set_cmd(args):
     from .commands.tasks import cmd_set
     cmd_set(list(args))
 
-
-@cli.command()
-def reorder():
-    """Manually set task priority order."""
-    _require_setup()
-    from .commands.tasks import cmd_reorder
-    cmd_reorder()
 
 
 @cli.command()

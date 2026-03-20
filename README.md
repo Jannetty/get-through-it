@@ -113,7 +113,8 @@ gti add description here     # add a task — no quotes needed
 gti add description here -d 2026-03-21 -t chapter_3  # with explicit due date and tags
 gti done 3                   # mark task #3 done
 gti done I fixed the parity issue   # natural language — Claude matches it
-gti reorder                  # manually set priority order
+gti set 3 high               # set priority: high, medium, low, or none
+gti set 3 in-progress        # set status: in-progress, done, or todo
 ```
 
 When you use `gti add` without explicit flags, Claude parses your description for embedded metadata:
@@ -269,7 +270,7 @@ gti open what I decided about the VAE approach
 | `gti add ...` | Add a task — Claude parses embedded due dates, tags, and priority |
 | `gti done <id or text>` | Mark a task done |
 | `gti do ...` | Natural language — Claude routes to add, done, or qn |
-| `gti reorder` | Manually set task priority |
+
 | `gti plan` | Pick this week's focus with Claude |
 | `gti pomo [id]` | 25/5 Pomodoro timer |
 | `gti note` | Structured session note |
