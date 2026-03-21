@@ -144,14 +144,26 @@ Claude figures out whether you mean `gti done`, `gti add`, or `gti qn` based on 
 ### End of day
 
 ```sh
-gti wrap day
+gti wrap day             # wrap today
+gti wrap day yesterday   # wrap a past day
+gti wrap day 2026-03-20  # wrap a specific date
 ```
 
 Claude reads your full daily note and:
 
-1. Appends a synthesis section at the bottom summarizing what you accomplished
+1. Appends a synthesis section at the bottom summarizing what you accomplished — you can approve it or give feedback to revise before it's saved
 2. Scans quick notes for action items and offers to create tasks from them
 3. Routes factual observations and findings to the relevant chapter notes
+
+When offered a potential task, you can accept with just `y`, or include priority and due date inline:
+
+```
+  → Run simulation with adjusted parameters
+  Add as a task? [Y/n] (): y high priority due monday
+  ✓ Added as task #13 (high priority, due 2026-03-23)
+```
+
+Accepted modifiers: `high`/`medium`/`low` priority, and `due <day>` where `<day>` is a weekday name (`monday`, `tue`, etc.), `today`, `tomorrow`, or a `YYYY-MM-DD` date.
 
 Your original notes are never modified — Claude only appends below a `---` divider.
 
@@ -275,7 +287,7 @@ gti open what I decided about the VAE approach
 | `gti pomo [id]` | 25/5 Pomodoro timer |
 | `gti note` | Structured session note |
 | `gti qn [text]` | Quick freeform note — inline or prompted (prompt handles apostrophes/quotes) |
-| `gti wrap day` | End-of-day synthesis + chapter note updates |
+| `gti wrap day [yesterday\|YYYY-MM-DD]` | End-of-day synthesis + chapter note updates (past days supported) |
 | `gti wrap week` | End-of-week reflection and summary |
 | `gti open [query]` | Open notes in VSCode — describe a note to jump straight to it |
 | `gti friend` | Chat with your friend dude |

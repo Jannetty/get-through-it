@@ -1,6 +1,7 @@
 """End-of-day and end-of-week wrap commands."""
 
 import calendar as cal_module
+import re
 from datetime import datetime, timedelta, date as date_type
 from pathlib import Path
 from rich.console import Console
@@ -81,6 +82,50 @@ def _parse_target_year(year_str):
     return None
 
 
+def _parse_inline_modifiers(text: str, today):
+    """Parse priority and due date from inline text like 'high priority due monday'.
+
+    Returns (priority_str_or_None, due_date_str_or_None).
+    """
+    text_lower = text.lower()
+
+    # Priority
+    priority = None
+    if "high" in text_lower:
+        priority = "high"
+    elif "low" in text_lower:
+        priority = "low"
+    elif "medium" in text_lower or "med" in text_lower:
+        priority = "medium"
+
+    # Due date — look for "due <token>"
+    due_date = None
+    m = re.search(r'\bdue\s+(\S+)', text_lower)
+    if m:
+        day_str = m.group(1).rstrip(".,;")
+        weekdays = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                    "friday": 4, "saturday": 5, "sunday": 6,
+                    "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+        if day_str == "today":
+            due_date = today.strftime("%Y-%m-%d")
+        elif day_str == "tomorrow":
+            due_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif day_str in weekdays:
+            target_wd = weekdays[day_str]
+            days_ahead = target_wd - today.weekday()
+            if days_ahead <= 0:
+                days_ahead += 7
+            due_date = (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+        else:
+            try:
+                datetime.strptime(day_str, "%Y-%m-%d")
+                due_date = day_str
+            except ValueError:
+                pass
+
+    return priority, due_date
+
+
 def cmd_wrap_day(date_str=None):
     ensure_dirs()
     now = datetime.now()
@@ -152,19 +197,46 @@ def cmd_wrap_day(date_str=None):
             any_added = False
             for item in potential_tasks:
                 console.print(f"\n  [cyan]→[/cyan] {item}")
-                if confirm("  Add as a task?", default=True):
+                while True:
+                    response = Prompt.ask(
+                        "  Add as a task? [[bold]Y[/bold]/n]",
+                        default=""
+                    ).strip()
+                    resp_lower = response.lower()
+                    if not resp_lower or resp_lower in ("y", "yes"):
+                        add_it, extra = True, ""
+                        break
+                    elif resp_lower.startswith("y "):
+                        add_it, extra = True, response[2:]
+                        break
+                    elif resp_lower in ("n", "no"):
+                        add_it, extra = False, ""
+                        break
+                    else:
+                        console.print("[dim]Please enter y or n.[/dim]")
+                if add_it:
+                    priority, due_date = _parse_inline_modifiers(extra, now.date()) if extra else (None, None)
                     task = {
                         "id": get_next_task_id(tasks),
                         "description": item,
                         "status": "todo",
+                        "priority": priority,
                         "created_at": now.isoformat(),
-                        "due_date": None,
+                        "due_date": due_date,
                         "tags": [],
                         "weekly": False,
                     }
                     tasks.append(task)
                     any_added = True
-                    console.print(f"  [green]✓[/green] Added as task #{task['id']}")
+                    added_msg = f"  [green]✓[/green] Added as task #{task['id']}"
+                    details = []
+                    if priority:
+                        details.append(f"{priority} priority")
+                    if due_date:
+                        details.append(f"due {due_date}")
+                    if details:
+                        added_msg += f" [dim]({', '.join(details)})[/dim]"
+                    console.print(added_msg)
             if any_added:
                 save_tasks(tasks)
 
